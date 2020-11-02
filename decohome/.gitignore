@@ -1,0 +1,7 @@
+.idea/*
+node_modeuls/*
+package-lock.json
+log/*
+.DS_Store
+nohup.out
+README.md
