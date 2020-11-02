@@ -10,6 +10,7 @@ const userDao = require('../dao/userDao');
 const { constants } = require('buffer');
 
 const regexPassword = /^[A-Za-z0-9]{8,}$/;
+const regNickname = /^[가-힣|a-z|A-Z|0-9|\*]+$/;
 
 /**
  * update - 2020.11.01
@@ -26,10 +27,11 @@ exports.signUp = async function (req, res) {
     if (!password || !regexPassword.test(password)) return res.json({ isSuccess: false, code: 302, message: "비밀번호를 확인해주세요 "});
     if (password.length > 20) return res.json({ isSuccess: false, code: 303, message: "비밀번호를 20자 미만으로 입력해주세요" });
 
-    if (!nickname || nickname < 4) return res.json({ isSuccess: false, code: 304, message: "닉네임은 4자 이상 적어주세요" });
-    if (nickname.length > 20) return res.json({ isSuccess: false, code: 305, message: "닉네임을 20자 미만으로 입력해주세요" });
+    if (!nickname || !regNickname.test(nickname)) return res.json({ isSuccess: false, code: 304, message: "닉네임은 한글, 영문, 숫자로만 입력해주세요" });
+    if (nickname.length < 4) return res.json({ isSuccess: false, code: 305, message: "닉네임은 4자 이상 적어주세요" });
+    if (nickname.length > 20) return res.json({ isSuccess: false, code: 306, message: "닉네임을 20자 미만으로 입력해주세요" });
 
-    if (!phone || phone.length > 11) return res.json({ isSuccess: false, code: 306, message: "휴대폰 번호를 확인해주세요" }); 
+    if (!phone || phone.length > 11) return res.json({ isSuccess: false, code: 307, message: "휴대폰 번호를 확인해주세요" }); 
 
     try {
         try {
@@ -38,7 +40,7 @@ exports.signUp = async function (req, res) {
             if (emailRows[0].exist === 1) {
                 return res.json({
                     isSuccess: false,
-                    code: 307,
+                    code: 308,
                     message: "이미 존재하는 이메일 입니다"
                 });
             }
@@ -48,7 +50,7 @@ exports.signUp = async function (req, res) {
             if (nicknameRows[0].exist === 1) {
                 return res.json({
                     isSuccess: false,
-                    code: 308,
+                    code: 309,
                     message: "이미 존재하는 닉네임 입니다"
                 });
             }
@@ -130,8 +132,8 @@ exports.signIn = async function (req, res) {
 };
 
 /**
- * update - 2019.09.23
- * 3. JWT 검증 API
+ * update - 2020.11.02
+ * JWT 검증 API
  **/
 exports.check = async function (req, res) {
     res.json({
@@ -141,3 +143,179 @@ exports.check = async function (req, res) {
         info: req.verifiedToken
     })
 };
+
+/**
+ * update - 2020.11.02
+ * 3. 프로필 조회 API
+ */
+exports.getProfile = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+
+    try {
+        try {
+            const userProfileRows = await userDao.getUserProfile(userId);
+
+            if (!userProfileRows) {
+                res.json({
+                result: userProfileRows,
+                isSuccess: false,
+                code: 300,
+                message: "프로필 조회 실패"
+                });
+
+                return false;
+            };
+
+            res.json({
+                result: userProfileRows,
+                isSuccess: true,
+                code: 200,
+                message: "프로필 조회 성공"
+            });
+        } catch (err) {
+            logger.error(`App - SignIn Query error\n: ${JSON.stringify(err)}`);
+            return false;
+        }
+    } catch (err) {
+        logger.error(`App - SignIn DB Connection error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.02
+ * 4. 프로필 수정 API
+ */
+exports.updateProfile = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    let {
+        name, nickname, phone, website, message
+    } = req.body;
+    
+    if (!name || !nickname || !phone) return res.json({ isSuccess: false, code: 300, message: "[이름],[닉네임],[핸드폰번호]는 필수로 입력해주세요." });
+    if (name.length > 10) return res.json({ isSuccess: false, code: 301, message: "이름은 10자 미만으로 적어주세요" });
+    if (nickname.length < 4) return res.json({ isSuccess: false, code: 302, message: "닉네임은 4자 이상 적어주세요" });
+    if (phone.length > 11) return res.json({ isSuccess: false, code: 303, message: "휴대폰 번호를 확인해주세요" }); 
+    if (website.length > 200) return res.json({ isSuccess: false, code: 304, message: "웹사이트는 100자 미만으로 적어주세요" });
+    if (message.length > 200) return res.json({ isSuccess: false, code: 305, message: "상태메세지는 100자 미만으로 적어주세요" }); 
+
+    if (!website) { website = null; };
+    if (!message) { message = null; };
+
+    try {
+        try {
+            await userDao.updateUserProfile(name, nickname, phone, website, message, userId);
+
+            res.json({
+                isSuccess: true,
+                code: 200,
+                message: "프로필 수정 성공"
+            });
+        } catch (err) {
+            logger.error(`App - SignIn Query error\n: ${JSON.stringify(err)}`);
+            return false;
+        }
+    } catch (err) {
+        logger.error(`App - SignIn DB Connection error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.02
+ * 5. 회원탈퇴 API
+ */ 
+exports.deleteProfile = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+
+    try {
+        try {
+            await userDao.deleteUserProfile(userId);
+
+            res.json({
+                isSuccess: true,
+                code: 200,
+                message: "회원탈퇴 성공"
+            });
+        } catch (err) {
+            logger.error(`App - SignIn Query error\n: ${JSON.stringify(err)}`);
+            return false;
+        }
+    } catch (err) {
+        logger.error(`App - SignIn DB Connection error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.02
+ * 6. 닉네임 중복검사 API
+ */
+exports.checkNickname = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        nickname
+    } = req.body;
+
+    if (!nickname || !regNickname.test(nickname)) return res.json({ isSuccess: false, code: 300, message: "닉네임은 한글, 영문, 숫자로만 입력해주세요" });
+    if (nickname < 4 || nickname.length > 20) return res.json({ isSuccess: false, code: 301, message: "닉네임은 4글자 이상으로 입력해주세요" });
+
+    try {
+        try {
+            // 닉네임 중복 확인
+            const nicknameRows = await userDao.userNicknameCheck(nickname);
+            if (nicknameRows[0].exist === 1) {
+                return res.json({
+                    isSuccess: false,
+                    code: 302,
+                    message: "이미 사용중인 닉네임 입니다"
+                });
+            }
+
+            return res.json({
+                isSuccess: true,
+                code: 200,
+                message: "사용 가능한 닉네임 입니다"
+            });
+        } catch (err) {
+            logger.error(`App - SignUp Query error\n: ${err.message}`);
+            return res.status(500).send(`Error: ${err.message}`);
+        }
+    } catch (err) {
+        logger.error(`App - SignUp DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+/**
+ * update - 2020.11.02
+ * 7. 프로필 이미지 수정 API
+ */
+exports.updateProfileImage = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    let {
+        idx, profileImage
+    } = req.body;
+
+    if (idx !== 1 && idx !== 2) return res.json({ isSuccess: false, code: 300, message: "idx 옵션을 확인해주세요" });
+    if (idx === 1 && !profileImage) return res.json({ isSuccess: false, code: 301, message: "사진이 선택되지 않았습니다" });
+
+    try {
+        try {
+            const profileImageRows = await userDao.updateProfileImage(profileImage, userId, idx);
+
+            return res.json({
+                isSuccess: true,
+                code: 200,
+                message: "프로필 이미지 수정 완료"
+            });
+        } catch (err) {
+            logger.error(`App - SignUp Query error\n: ${err.message}`);
+            return res.status(500).send(`Error: ${err.message}`);
+        }
+    } catch (err) {
+        logger.error(`App - SignUp DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
