@@ -31,7 +31,7 @@ exports.signUp = async function (req, res) {
     if (nickname.length < 4) return res.json({ isSuccess: false, code: 305, message: "닉네임은 4자 이상 적어주세요" });
     if (nickname.length > 20) return res.json({ isSuccess: false, code: 306, message: "닉네임을 20자 미만으로 입력해주세요" });
 
-    if (!phone || phone.length > 11) return res.json({ isSuccess: false, code: 307, message: "휴대폰 번호를 확인해주세요" }); 
+    if (!phone || phone.length > 11 || phone.length < 10) return res.json({ isSuccess: false, code: 307, message: "휴대폰 번호를 확인해주세요" }); 
 
     try {
         try {
