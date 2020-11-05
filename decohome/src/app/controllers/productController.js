@@ -22,8 +22,8 @@ exports.getProducts = async function (req, res) {
     
     if (page < 1) return res.json({ isSuccess: false, code: 300, message: "페이지 번호 확인" });
     if (large > 7 || large < 1) return res.json({ isSuccess: false, code: 301, message: "존재하지 않는 대분류" });
-    if (medium > 28 || medium < 1) return res.json({ isSuccess: false, code: 302, message: "존재하지 않는 중분류" });
-    if (small > 128 || small < 1) return res.json({ isSuccess: false, code: 303, message: "존재하지 않는 소분류" });
+    if (medium > 35 || medium < 8) return res.json({ isSuccess: false, code: 302, message: "존재하지 않는 중분류" });
+    if (small > 158 || small < 36) return res.json({ isSuccess: false, code: 303, message: "존재하지 않는 소분류" });
     if (min < 0) return res.json({ isSuccess: false, code: 304, message: "최소 금액 오류" });
 
     page = size * (page-1);
@@ -51,14 +51,6 @@ exports.getProducts = async function (req, res) {
             return res.json({ isSuccess: false, code: 305, message: "조회 필터링 실패" });
     }
 
-    if (large && !medium && !small) {
-        cateCond = 'and largeCateId = ' + large;
-    } else if (large && medium && !small) {
-        cateCond = 'and largeCateId = ' + large + ' and mediumCateId = ' + medium;
-    } else if (large && medium && small) {
-        cateCond = 'and largeCateId = ' + large + ' and mediumCateId = ' + medium + ' and smallCateId = ' + small;
-    } else cateCond = '';
-
     if (brand) {
         brandCond = 'and p.brandId = ' + brand;
     } else brandCond = '';
@@ -72,6 +64,20 @@ exports.getProducts = async function (req, res) {
     } else priceCond = '';
 
     try {
+        if (large) {
+            const cateIdRows = await productDao.getCategoryId(large);
+            const first = cateIdRows[0].categoryId;
+            const last = cateIdRows[cateIdRows.length - 1].categoryId;
+
+            if (large && !medium && !small) {
+                cateCond = 'and (categoryRef >= ' + first + ' and categoryRef <= ' + last + ')';
+            } else if (large && medium && !small) {
+                cateCond = 'and categoryRef = ' + medium;
+            } else if (large && medium && small) {
+                cateCond = 'and p.categoryId = ' + small;
+            }
+        } else cateCond = '';
+        
         const productRows = await productDao.getAllProducts(condition, page, size, cateCond, brandCond, priceCond);
 
         if (!productRows) {
@@ -107,18 +113,10 @@ exports.getProductCount = async function (req, res) {
         large, medium, small, brand, min, max
     } = req.query;
 
-    if (large > 7 || large < 1) return res.json({ isSuccess: false, code: 300, message: "존재하지 않는 대분류 카테고리" });
-    if (medium > 28 || medium < 1) return res.json({ isSuccess: false, code: 301, message: "존재하지 않는 중분류 카테고리" });
-    if (small > 128 || small < 1) return res.json({ isSuccess: false, code: 302, message: "존재하지 않는 소분류 카테고리" });
+    if (large > 7 || large < 1) return res.json({ isSuccess: false, code: 300, message: "존재하지 않는 대분류" });
+    if (medium > 35 || medium < 8) return res.json({ isSuccess: false, code: 301, message: "존재하지 않는 중분류" });
+    if (small > 158 || small < 36) return res.json({ isSuccess: false, code: 302, message: "존재하지 않는 소분류" });
     if (min < 0) return res.json({ isSuccess: false, code: 303, message: "최소 금액 오류" });
-
-    if (large && !medium && !small) {
-        cateCond = 'and largeCateId = ' + large;
-    } else if (large && medium && !small) {
-        cateCond = 'and largeCateId = ' + large + ' and mediumCateId = ' + medium;
-    } else if (large && medium && small) {
-        cateCond = 'and largeCateId = ' + large + ' and mediumCateId = ' + medium + ' and smallCateId = ' + small;
-    } else cateCond = '';
 
     if (brand) {
         brandCond = 'and brandId = ' + brand;
@@ -133,6 +131,20 @@ exports.getProductCount = async function (req, res) {
     } else priceCond = '';
 
     try {
+        if (large) {
+            const cateIdRows = await productDao.getCategoryId(large);
+            const first = cateIdRows[0].categoryId;
+            const last = cateIdRows[cateIdRows.length - 1].categoryId;
+
+            if (large && !medium && !small) {
+                cateCond = 'and (categoryRef >= ' + first + ' and categoryRef <= ' + last + ')';
+            } else if (large && medium && !small) {
+                cateCond = 'and categoryRef = ' + medium;
+            } else if (large && medium && small) {
+                cateCond = 'and p.categoryId = ' + small;
+            }
+        } else cateCond = '';
+
         const countRows = await productDao.countProducts(cateCond, brandCond, priceCond);
 
         if (!countRows) {
@@ -154,6 +166,57 @@ exports.getProductCount = async function (req, res) {
         return false;
     }
 }
+
+/**
+ * update - 2020.11.05
+ * 11. 카테고리 조회 API
+ */
+exports.getCategory = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    let condition, idx;
+    const {
+        large, medium, small
+    } = req.query;
+
+    if (!large && !medium && !small) {
+        condition = ' categoryRef = 0';
+        idx = 1;
+    } else if (large && !medium && !small) {
+        condition = ' categoryRef = ' + large + ' or categoryId = ' + large;
+        idx = 2;
+    } else if (large && medium && !small) {
+        condition = ' categoryId = ' + large + ' or (categoryRef = ' + large + ' and categoryId = ' + medium + ') or categoryRef = ' + medium;
+        idx = 3;
+    } else if (large && medium && small) {
+        condition = ' categoryId = ' + large + ' or categoryId = ' + medium + ' or categoryId = ' + small;
+        idx = 4;
+    } else return res.json({ isSuccess: false, code: 300, message: "잘못된 카테고리" });
+
+    try {
+        const categoryRows = await productDao.getCategoryName(condition, idx);
+
+        if (!categoryRows) {
+            return res.json({
+            isSuccess: false,
+            code: 301,
+            message: "카테고리 목록 조회 실패"
+            });
+        };
+
+        res.json({
+            result: categoryRows,
+            isSuccess: true,
+            code: 200,
+            message: "카테고리 목록 조회 성공"
+        });
+    } catch (err) {
+        logger.error(`App - CategoryName Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+
+
 
 /**
  * update - 2020.11.05
@@ -185,40 +248,3 @@ exports.getBrands = async function (req, res) {
     }
 }
 
-
-
-/**
- * update - 2020.11.05
- * 9. 카테고리 이름 조회 API
- */
-exports.getCategoryName = async function (req, res) {
-    const userId = req.verifiedToken.userId;
-    let {
-        page, size
-    } = req.query;
-    page = size * (page-1);
-
-    try {
-        const productRows = await productDao.getCateName(page, size);
-
-        if (!productRows) {
-            res.json({
-            isSuccess: false,
-            code: 300,
-            message: "전체 상품 조회 실패"
-            });
-
-            return false;
-        };
-
-        res.json({
-            result: productRows,
-            isSuccess: true,
-            code: 200,
-            message: "전체 상품 조회 성공"
-        });
-    } catch (err) {
-        logger.error(`App - CategoryProducts Query error\n: ${JSON.stringify(err)}`);
-        return false;
-    }
-}

@@ -5,4 +5,5 @@ module.exports = function(app){
     app.route('/products').get(jwtMiddleware, product.getProducts);
     app.route('/brands').get(jwtMiddleware, product.getBrands);
     app.route('/counts/product').get(jwtMiddleware, product.getProductCount);
+    app.route('/category').get(jwtMiddleware, product.getCategory);
 };
