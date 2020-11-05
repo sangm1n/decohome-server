@@ -34,49 +34,44 @@ exports.signUp = async function (req, res) {
     if (!phone || phone.length > 11 || phone.length < 10) return res.json({ isSuccess: false, code: 307, message: "휴대폰 번호를 확인해주세요" }); 
 
     try {
-        try {
-            // 이메일 중복 확인
-            const emailRows = await userDao.userEmailCheck(email);
-            if (emailRows[0].exist === 1) {
-                return res.json({
-                    isSuccess: false,
-                    code: 308,
-                    message: "이미 존재하는 이메일 입니다"
-                });
-            }
-
-            // 닉네임 중복 확인
-            const nicknameRows = await userDao.userNicknameCheck(nickname);
-            if (nicknameRows[0].exist === 1) {
-                return res.json({
-                    isSuccess: false,
-                    code: 309,
-                    message: "이미 존재하는 닉네임 입니다"
-                });
-            }
-
-            // TRANSACTION : advanced
-           // await connection.beginTransaction(); // START TRANSACTION
-            const hashedPassword = await crypto.createHash('sha512').update(password).digest('hex');
-            const insertUserInfoParams = [email, hashedPassword, nickname, phone];
-            
-            const insertUserRows = await userDao.insertUserInfo(insertUserInfoParams);
-
-          //  await connection.commit(); // COMMIT
-           // connection.release();
+        // 이메일 중복 확인
+        const emailRows = await userDao.userEmailCheck(email);
+        if (emailRows[0].exist === 1) {
             return res.json({
-                isSuccess: true,
-                code: 200,
-                message: "회원가입 성공"
+                isSuccess: false,
+                code: 308,
+                message: "이미 존재하는 이메일 입니다"
             });
-        } catch (err) {
-           // await connection.rollback(); // ROLLBACK
-           // connection.release();
-            logger.error(`App - SignUp Query error\n: ${err.message}`);
-            return res.status(500).send(`Error: ${err.message}`);
         }
+
+        // 닉네임 중복 확인
+        const nicknameRows = await userDao.userNicknameCheck(nickname);
+        if (nicknameRows[0].exist === 1) {
+            return res.json({
+                isSuccess: false,
+                code: 309,
+                message: "이미 존재하는 닉네임 입니다"
+            });
+        }
+
+        // TRANSACTION : advanced
+        // await connection.beginTransaction(); // START TRANSACTION
+        const hashedPassword = await crypto.createHash('sha512').update(password).digest('hex');
+        const insertUserInfoParams = [email, hashedPassword, nickname, phone];
+        
+        const insertUserRows = await userDao.insertUserInfo(insertUserInfoParams);
+
+        //  await connection.commit(); // COMMIT
+        // connection.release();
+        return res.json({
+            isSuccess: true,
+            code: 200,
+            message: "회원가입 성공"
+        });
     } catch (err) {
-        logger.error(`App - SignUp DB Connection error\n: ${err.message}`);
+        // await connection.rollback(); // ROLLBACK
+        // connection.release();
+        logger.error(`App - signUp Query error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);
     }
 };
@@ -91,42 +86,37 @@ exports.signIn = async function (req, res) {
     } = req.body;
 
     try {
-        try {
-            const userInfoRows = await userDao.selectUserInfo(email);
-            const emailCheck = await userDao.userEmailCheck(email);
-            const hashedPassword = await crypto.createHash('sha512').update(password).digest('hex');
-            
-            if (emailCheck[0].exist === 0 || userInfoRows[0].password !== hashedPassword) {
-                return res.json({
-                    isSuccess: false,
-                    code: 300,
-                    message: "이메일 주소 혹은 비밀번호가 일치하지 않습니다"
-                });
-            }
-
-            //토큰 생성
-            let token = await jwt.sign({
-                    userId: userInfoRows[0].userId,
-                }, // 토큰의 내용(payload)
-                secret_config.jwtsecret, // 비밀 키
-                {
-                    expiresIn: '365d',
-                    subject: 'userId',
-                } // 유효 시간은 365일
-            );
-
-            res.json({
-                result: {jwt: token},
-                isSuccess: true,
-                code: 200,
-                message: "로그인 성공"
+        const userInfoRows = await userDao.selectUserInfo(email);
+        const emailCheck = await userDao.userEmailCheck(email);
+        const hashedPassword = await crypto.createHash('sha512').update(password).digest('hex');
+        
+        if (emailCheck[0].exist === 0 || userInfoRows[0].password !== hashedPassword) {
+            return res.json({
+                isSuccess: false,
+                code: 300,
+                message: "이메일 주소 혹은 비밀번호가 일치하지 않습니다"
             });
-        } catch (err) {
-            logger.error(`App - SignIn Query error\n: ${JSON.stringify(err)}`);
-            return false;
         }
+
+        //토큰 생성
+        let token = await jwt.sign({
+                userId: userInfoRows[0].userId,
+            }, // 토큰의 내용(payload)
+            secret_config.jwtsecret, // 비밀 키
+            {
+                expiresIn: '365d',
+                subject: 'userId',
+            } // 유효 시간은 365일
+        );
+
+        res.json({
+            result: {jwt: token},
+            isSuccess: true,
+            code: 200,
+            message: "로그인 성공"
+        });
     } catch (err) {
-        logger.error(`App - SignIn DB Connection error\n: ${JSON.stringify(err)}`);
+        logger.error(`App - SignIn Query error\n: ${JSON.stringify(err)}`);
         return false;
     }
 };
@@ -152,32 +142,24 @@ exports.getProfile = async function (req, res) {
     const userId = req.verifiedToken.userId;
 
     try {
-        try {
-            const userProfileRows = await userDao.getUserProfile(userId);
+        const userProfileRows = await userDao.getUserProfile(userId);
 
-            if (!userProfileRows) {
-                res.json({
-                result: userProfileRows,
-                isSuccess: false,
-                code: 300,
-                message: "프로필 조회 실패"
-                });
-
-                return false;
-            };
-
-            res.json({
-                result: userProfileRows,
-                isSuccess: true,
-                code: 200,
-                message: "프로필 조회 성공"
+        if (!userProfileRows) {
+            return res.json({
+            isSuccess: false,
+            code: 300,
+            message: "프로필 조회 실패"
             });
-        } catch (err) {
-            logger.error(`App - SignIn Query error\n: ${JSON.stringify(err)}`);
-            return false;
-        }
+        };
+
+        res.json({
+            result: userProfileRows,
+            isSuccess: true,
+            code: 200,
+            message: "프로필 조회 성공"
+        });
     } catch (err) {
-        logger.error(`App - SignIn DB Connection error\n: ${JSON.stringify(err)}`);
+        logger.error(`App - UserProfile Query error\n: ${JSON.stringify(err)}`);
         return false;
     }
 }
@@ -203,20 +185,15 @@ exports.updateProfile = async function (req, res) {
     if (!message) { message = null; };
 
     try {
-        try {
-            await userDao.updateUserProfile(name, nickname, phone, website, message, userId);
+        await userDao.updateUserProfile(name, nickname, phone, website, message, userId);
 
-            res.json({
-                isSuccess: true,
-                code: 200,
-                message: "프로필 수정 성공"
-            });
-        } catch (err) {
-            logger.error(`App - SignIn Query error\n: ${JSON.stringify(err)}`);
-            return false;
-        }
+        res.json({
+            isSuccess: true,
+            code: 200,
+            message: "프로필 수정 성공"
+        });
     } catch (err) {
-        logger.error(`App - SignIn DB Connection error\n: ${JSON.stringify(err)}`);
+        logger.error(`App - UpdateProfile Query error\n: ${JSON.stringify(err)}`);
         return false;
     }
 }
@@ -229,20 +206,15 @@ exports.deleteProfile = async function (req, res) {
     const userId = req.verifiedToken.userId;
 
     try {
-        try {
-            await userDao.deleteUserProfile(userId);
+        await userDao.deleteUserProfile(userId);
 
-            res.json({
-                isSuccess: true,
-                code: 200,
-                message: "회원탈퇴 성공"
-            });
-        } catch (err) {
-            logger.error(`App - SignIn Query error\n: ${JSON.stringify(err)}`);
-            return false;
-        }
+        res.json({
+            isSuccess: true,
+            code: 200,
+            message: "회원탈퇴 성공"
+        });
     } catch (err) {
-        logger.error(`App - SignIn DB Connection error\n: ${JSON.stringify(err)}`);
+        logger.error(`App - DeleteProfile Query error\n: ${JSON.stringify(err)}`);
         return false;
     }
 }
@@ -261,28 +233,23 @@ exports.checkNickname = async function (req, res) {
     if (nickname < 4 || nickname.length > 20) return res.json({ isSuccess: false, code: 301, message: "닉네임은 4글자 이상으로 입력해주세요" });
 
     try {
-        try {
-            // 닉네임 중복 확인
-            const nicknameRows = await userDao.userNicknameCheck(nickname);
-            if (nicknameRows[0].exist === 1) {
-                return res.json({
-                    isSuccess: false,
-                    code: 302,
-                    message: "이미 사용중인 닉네임 입니다"
-                });
-            }
-
+        // 닉네임 중복 확인
+        const nicknameRows = await userDao.userNicknameCheck(nickname);
+        if (nicknameRows[0].exist === 1) {
             return res.json({
-                isSuccess: true,
-                code: 200,
-                message: "사용 가능한 닉네임 입니다"
+                isSuccess: false,
+                code: 302,
+                message: "이미 사용중인 닉네임 입니다"
             });
-        } catch (err) {
-            logger.error(`App - SignUp Query error\n: ${err.message}`);
-            return res.status(500).send(`Error: ${err.message}`);
         }
+
+        return res.json({
+            isSuccess: true,
+            code: 200,
+            message: "사용 가능한 닉네임 입니다"
+        });
     } catch (err) {
-        logger.error(`App - SignUp DB Connection error\n: ${err.message}`);
+        logger.error(`App - CheckNickname Query error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);
     }
 }
@@ -301,21 +268,15 @@ exports.updateProfileImage = async function (req, res) {
     if (idx === 1 && !profileImage) return res.json({ isSuccess: false, code: 301, message: "사진이 선택되지 않았습니다" });
 
     try {
-        try {
-            const profileImageRows = await userDao.updateProfileImage(profileImage, userId, idx);
+        const profileImageRows = await userDao.updateProfileImage(profileImage, userId, idx);
 
-            return res.json({
-                isSuccess: true,
-                code: 200,
-                message: "프로필 이미지 수정 완료"
-            });
-        } catch (err) {
-            logger.error(`App - SignUp Query error\n: ${err.message}`);
-            return res.status(500).send(`Error: ${err.message}`);
-        }
+        return res.json({
+            isSuccess: true,
+            code: 200,
+            message: "프로필 이미지 수정 완료"
+        });
     } catch (err) {
-        logger.error(`App - SignUp DB Connection error\n: ${err.message}`);
+        logger.error(`App - UpdateProfileImage Query error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);
     }
 }
-

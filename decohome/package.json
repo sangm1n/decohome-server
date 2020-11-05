@@ -6,11 +6,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "NODE_ENV=development nodemon index.js",
-    "prod": "NODE_ENV=production node index.js"
+    "prod": "NODE_ENV=production pm2 start index.js --name='decohome prod'"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "aws-sdk": "^2.784.0",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
