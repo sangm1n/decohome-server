@@ -260,6 +260,27 @@ async function checkProduct(productId) {
     }
 }
 
+// 상품 정보 조회
+async function getProductDetail(productId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const getProductDetailQuery = `
+        select productInfo from Product where productId = ? and isDeleted = 'N';
+        `;
+        const getProductDetailParams = [productId];
+        const [productRows] = await connection.query(
+            getProductDetailQuery,
+            getProductDetailParams
+        );
+        connection.release();
+        
+        return productRows;
+    } catch (err) {
+        logger.error(`App - getProductImage DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
 // 브랜드 목록
 async function getBrandList(condition) {
     try {
@@ -298,8 +319,6 @@ async function getBrandImage(arr) {
         on b.brandId = v.brandId
         where v.rn <= 3 order by field(b.brandId, ` + arr + `);
         `;
-
-        console.log(getBrandListQuery);
         const getBrandListParams = [arr]
         const brandRows = await connection.query(
             getBrandListQuery,
@@ -314,7 +333,77 @@ async function getBrandImage(arr) {
     }
 }
 
-// 가격대
+// 신상품
+async function getNewProductItem(page, size) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const getNewProductItemQuery = `
+        select p.productId, productName, productImage, concat(round((1 - salePrice / originalPrice) * 100), '%') as saleRatio
+        from Product p
+        join ProductImage pi on p.productId = pi.productId
+        where p.isDeleted = 'N'
+        and pi.isDeleted = 'N'
+        and p.isSoldedOut = 'N'
+        and salePrice != -1
+        group by p.productId
+        order by p.createdAt desc
+        limit ` + page + `, ` + size + `;
+        `;
+        const getNewProductItemParams = [page, size];
+        const [newProductRows] = await connection.query(
+            getNewProductItemQuery,
+            getNewProductItemParams
+        );
+        connection.release();
+        
+        return newProductRows;
+    } catch (err) {
+        logger.error(`App - getNewProductItem DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+// 실시간 랭킹
+async function getRankingProduct() {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const getRankingProductQuery = `
+        select p.productId,
+        brandName,
+        productName,
+        productImage,
+        concat(format(originalPrice, 0), ' 원')                    as originalPrice,
+        concat(format(salePrice, 0), ' 원')                        as salePrice,
+        concat(round((1 - salePrice / originalPrice) * 100), '%') as saleRatio,
+        v.averageScore,
+        concat('(리뷰 ', ifnull(v.countReview, 0), ')')             as countReview
+        from Product p
+        join ProductImage pi on p.productId = pi.productId
+        join Brand b on p.brandId = b.brandId
+        join (select p.productId, count(reviewId) as countReview, round(avg(score), 1) as averageScore
+        from ProductReview pr
+        join Product p on p.productId = pr.productId
+        group by pr.productId) v on p.productId = v.productId
+        where salePrice != -1
+        and p.isDeleted = 'N'
+        and p.isSoldedOut = 'N'
+        group by p.productId
+        order by v.averageScore desc
+        limit 3;
+        `;
+        const [rankProductRows] = await connection.query(
+            getRankingProductQuery
+        );
+        connection.release();
+        
+        return rankProductRows;
+    } catch (err) {
+        logger.error(`App - getRankingProduct DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+
 
 module.exports = {
     getAllProducts,
@@ -328,4 +417,7 @@ module.exports = {
     getProductInfo,
     checkProduct,
     getBrandImage,
+    getProductDetail,
+    getNewProductItem,
+    getRankingProduct,
 };
