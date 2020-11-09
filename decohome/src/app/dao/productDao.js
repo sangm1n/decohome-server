@@ -6,10 +6,10 @@ async function getAllProducts(condition, page, size, cateCond, brandCond, priceC
         const connection = await pool.getConnection(async (conn) => conn);
         const getAllProductsQuery = `
         select p.productId, brandName, productName,
-        format(originalPrice, 0)                                                                as originalPrice,
-        if(salePrice = -1, null, format(salePrice, 0))                                          as salePrice,
+        concat(format(originalPrice, 0), '원')                                         as originalPrice,
+        if(salePrice = -1, -1, concat(format(salePrice, 0), '원'))                                 as salePrice,
         if(p.isSoldedOut = 'Y', '품절',
-        if(salePrice = -1, null, concat(round((1 - salePrice / originalPrice) * 100), '%'))) as saleRatio, productImage
+        if(salePrice = -1, -1, concat(round((1 - salePrice / originalPrice) * 100), '%'))) as saleRatio, productImage
         from Product p
         join Category c on p.categoryId = c.categoryId
         join Brand b on p.brandId = b.brandId
@@ -181,50 +181,50 @@ async function getProductInfo(productId) {
     try {
         const connection = await pool.getConnection(async (conn) => conn);
         const getProductInfoQuery = `   
-select if(p.isSoldedOut = 'Y', '품절', null)                                                                          as isSoldedOut,
-if(isFreeShipped = 'Y', '무료배송', null)                                                                        as isFreeShipped,
-if(isLowestPrice = 'Y', '최저가', null)                                                                         as isLowestPrice,
-if(isOnlyLowest = 'Y', '단독 최저가', null)                                                                       as isOnlyLowest,
-ifnull(v.averageScore, null)                                                                             as averageScore,
-ifnull(v.countReview, null)                                                                                      as countReview,
-brandName,
-productName,
-if(p.isSoldedOut = 'Y', null,
-if(salePrice = -1, null,
-concat(round((1 - salePrice / originalPrice) * 100), '%')))                                            as saleRatio,
-if(p.isSoldedOut = 'Y', null,
-if(salePrice = -1, null, format(salePrice, 0)))                                                           as salePrice,
-format(originalPrice, 0)                                                                                     as originalPrice,
-if(salePrice = -1, concat('최대 ', round(originalPrice * 0.02, 0), '원 적립'),
-concat('최대 ', format(round(salePrice * 0.02, 0), 0), '원 적립'))                                           as accumulate,
-shippingPrice,
-if(arrivalDate = -1, null, if(arrivalWeekend = 'Y', concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 포함)'),
-concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 미포함)')))                         as arrivalDate,
-case
-when payMethod = 'P' then '선불'
-when payMethod = 'C' then '착불'
-when payMethod = 'I'
-then '선불 (+설치비)' end                                                                                 as payMethod,
-case
-when shippingType = 'A' then '택배'
-when shippingType = 'B' then '일반배송'
-when shippingType = 'C' then '화물배송'
-when shippingType = 'D' then '직접배송'
-end                                                                                                      as shippingType,
-if(mountainous = -1, '상세하단 참고',
-concat('배송비 별도 추가 (제주도 : ', format(mountainous, 0), '원'))                                                 as mountainous
-from Product p
-join Brand b on p.brandId = b.brandId
-left join (select p.productId,
-concat('리뷰 ', count(reviewId), '개') as countReview,
-round(avg(score), 0)                as averageScore
-from ProductReview pr
-join Product p on p.productId = pr.productId
-where pr.isDeleted = 'N'
-group by pr.productId) v on p.productId = v.productId
-join ProductShipping ps on p.productId = ps.productId
-where p.productId = ?
-and p.isDeleted = 'N';
+        select if(p.isSoldedOut = 'Y', '품절', -1)                                                                          as isSoldedOut,
+        if(isFreeShipped = 'Y', '무료배송', -1)                                                                        as isFreeShipped,
+        if(isLowestPrice = 'Y', '최저가', -1)                                                                         as isLowestPrice,
+        if(isOnlyLowest = 'Y', '단독 최저가', -1)                                                                       as isOnlyLowest,
+        ifnull(v.averageScore, 0)                                                                             as averageScore,
+        ifnull(v.countReview, 0)                                                                                      as countReview,
+        brandName,
+        productName,
+        if(p.isSoldedOut = 'Y', -1,
+        if(salePrice = -1, -1,
+        concat(round((1 - salePrice / originalPrice) * 100), '%')))                                            as saleRatio,
+        if(p.isSoldedOut = 'Y', -1,
+        if(salePrice = -1, -1, concat(format(salePrice, 0), '원')))                                                           as salePrice,
+        format(originalPrice, 0)                                                                                     as originalPrice,
+        if(salePrice = -1, concat('최대 ', round(originalPrice * 0.02, 0), '원 적립'),
+        concat('최대 ', format(round(salePrice * 0.02, 0), 0), '원 적립'))                                           as accumulate,
+        shippingPrice,
+        if(arrivalDate = -1, -1, if(arrivalWeekend = 'Y', concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 포함)'),
+        concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 미포함)')))                         as arrivalDate,
+        case
+        when payMethod = 'P' then '선불'
+        when payMethod = 'C' then '착불'
+        when payMethod = 'I'
+        then '선불 (+설치비)' end                                                                                 as payMethod,
+        case
+        when shippingType = 'A' then '택배'
+        when shippingType = 'B' then '일반배송'
+        when shippingType = 'C' then '화물배송'
+        when shippingType = 'D' then '직접배송'
+        end                                                                                                      as shippingType,
+        if(mountainous = -1, '상세하단 참고',
+        concat('배송비 별도 추가 (제주도 : ', format(mountainous, 0), '원'))                                                 as mountainous
+        from Product p
+        join Brand b on p.brandId = b.brandId
+        left join (select p.productId,
+        concat('리뷰 ', count(reviewId), '개') as countReview,
+        round(avg(score), 0)                as averageScore
+        from ProductReview pr
+        join Product p on p.productId = pr.productId
+        where pr.isDeleted = 'N'
+        group by pr.productId) v on p.productId = v.productId
+        join ProductShipping ps on p.productId = ps.productId
+        where p.productId = ?
+        and p.isDeleted = 'N';
         `;
         const getProductInfoParams = [productId];
         const [productRows] = await connection.query(
@@ -233,7 +233,7 @@ and p.isDeleted = 'N';
         );
         connection.release();
         
-        return productRows;
+        return productRows[0];
     } catch (err) {
         logger.error(`App - getProductInfo DB Connection error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);
@@ -364,7 +364,7 @@ async function getNewProductItem(page, size) {
 }
 
 // 실시간 랭킹
-async function getRankingProduct() {
+async function getRankingProduct(page, size, cateCond) {
     try {
         const connection = await pool.getConnection(async (conn) => conn);
         const getRankingProductQuery = `
@@ -372,8 +372,8 @@ async function getRankingProduct() {
         brandName,
         productName,
         productImage,
-        concat(format(originalPrice, 0), ' 원')                    as originalPrice,
-        concat(format(salePrice, 0), ' 원')                        as salePrice,
+        concat(format(originalPrice, 0), '원')                    as originalPrice,
+        concat(format(salePrice, 0), '원')                        as salePrice,
         concat(round((1 - salePrice / originalPrice) * 100), '%') as saleRatio,
         v.averageScore,
         concat('(리뷰 ', ifnull(v.countReview, 0), ')')             as countReview
@@ -384,15 +384,18 @@ async function getRankingProduct() {
         from ProductReview pr
         join Product p on p.productId = pr.productId
         group by pr.productId) v on p.productId = v.productId
+        join Category c on p.categoryId = c.categoryId
         where salePrice != -1
         and p.isDeleted = 'N'
-        and p.isSoldedOut = 'N'
+        and p.isSoldedOut = 'N' ` + cateCond + `
         group by p.productId
         order by v.averageScore desc
-        limit 3;
+        limit ` + page + `, ` + size + `;
         `;
+        const getRankingProductParams = [page, size, cateCond];
         const [rankProductRows] = await connection.query(
-            getRankingProductQuery
+            getRankingProductQuery,
+            getRankingProductParams
         );
         connection.release();
         
@@ -403,7 +406,115 @@ async function getRankingProduct() {
     }
 }
 
+// 추천상품 탭
+async function getRecomTab(condition) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const getRecomTabQuery = `
+        select r.recommendId,
+        recomThumbnail,
+        recomTitle,
+        recomIntro,
+        concat('~', max(round((1 - salePrice / originalPrice) * 100)), '%') as maxSaleRatio
+        from Recommend r
+        join Product p on r.recommendId = p.recommendId
+        where salePrice != -1
+        group by r.recommendId ` + condition + `;
+        `;
+        const getRecomTabParams = [condition];
+        const [recomRows] = await connection.query(
+            getRecomTabQuery,
+            getRecomTabParams
+        );
+        connection.release();
+        
+        return recomRows;
+    } catch (err) {
+        logger.error(`App - getRecomTab DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
 
+async function getRecomPost(recommendId, page, size) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const getRecomPostQuery = `
+        select p.productId,
+        productImage,
+        brandName,
+        productName,
+        concat(format(originalPrice, 0), '원')                                                       as originalPrice,
+        if(salePrice = -1, -1, concat(format(salePrice, 0), '원'))                                 as salePrice,
+        if(isSoldedOut = 'Y', '품절',
+        if(salePrice = -1, -1, concat(round((1 - salePrice / originalPrice) * 100), '%'))) as saleRatio,
+        if(isFreeShipped = 'Y', '무료배송', -1)                                                   as isFreeShipped,
+        if(isSoldedOut = 'Y', '재고없음', -1)                                                     as isSoldedOut,
+        if(isLowestPrice = 'Y', '최저가', -1)                                                    as isLowestPrice,
+        if(isOnlyLowest = 'Y', '단독 최저가', -1)                                                  as isOnlyLowest,
+        if(isVideo = 'Y', '영상속제품', -1)                                                        as isVideo
+        from Product p
+        join ProductImage pi on p.productId = pi.productId
+        join Brand b on p.brandId = b.brandId
+        where pi.isThumbnailed = 'Y'
+        and p.isDeleted = 'N'
+        and b.isDeleted = 'N'
+        and recommendId = ?
+        group by p.productId
+        limit ` + page + `, ` + size + `;
+        `;
+        const getRecomPostParams = [recommendId, page, size];
+        const [recomRows] = await connection.query(
+            getRecomPostQuery,
+            getRecomPostParams
+        );
+        connection.release();
+        
+        return recomRows;
+    } catch (err) {
+        logger.error(`App - getRecomPost DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function getRecomImage(recommendId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const getRecomImageQuery = `
+        select recomImage from Recommend where recommendId = ?;
+        `;
+        const getRecomImageParams = [recommendId];
+        const [recomRows] = await connection.query(
+            getRecomImageQuery,
+            getRecomImageParams
+        );
+        connection.release();
+        
+        return recomRows[0];
+    } catch (err) {
+        logger.error(`App - getRecomImage DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function checkRecommend(recommendId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const checkRecommendQuery = `
+        select exists (select recommendId from Recommend where recommendId = ?) as exist;
+        `;
+        const checkRecommendParams = [recommendId];
+        const [checkRecommendRows] = await connection.query(
+            checkRecommendQuery,
+            checkRecommendParams
+        );
+        connection.release();
+        
+        return checkRecommendRows[0].exist;
+    } catch (err) {
+        logger.error(`App - checkRecommend DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
 
 module.exports = {
     getAllProducts,
@@ -420,4 +531,8 @@ module.exports = {
     getProductDetail,
     getNewProductItem,
     getRankingProduct,
+    getRecomTab,
+    getRecomPost,
+    checkRecommend,
+    getRecomImage,
 };

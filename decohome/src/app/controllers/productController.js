@@ -285,19 +285,37 @@ exports.getNewProduct = async function (req, res) {
 
 /**
  * update - 2020.11.07
- * 14. 실시간 랭킹 Top 3 조회 API
+ * 14. 실시간 랭킹 조회 API
  */
 exports.getRankingProduct = async function (req, res) {
     const userId = req.verifiedToken.userId;
 
+    let {
+        page, size, large
+    } = req.query;
+    
+    if (!page) return res.json({ isSuccess: false, code: 300, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 301, message: "사이즈 입력 필요" });
+    if (large > 7 || large < 1) return res.json({ isSuccess: false, code: 302, message: "존재하지 않는 대분류" });
+
+    page = size * (page-1);
+
     try {
-        const rankingRows = await productDao.getRankingProduct();
+        if (large) {
+            const cateIdRows = await productDao.getCategoryId(large);
+            const first = cateIdRows[0].categoryId;
+            const last = cateIdRows[cateIdRows.length - 1].categoryId;
+
+            cateCond = 'and (categoryRef >= ' + first + ' and categoryRef <= ' + last + ')';
+        } else cateCond = '';
+
+        const rankingRows = await productDao.getRankingProduct(page, size, cateCond);
 
         if (!rankingRows) {
             return res.json({
             isSuccess: false,
-            code: 300,
-            message: "실시간 랭킹 top 3 조회 실패"
+            code: 303,
+            message: "실시간 랭킹 조회 실패"
             });
         };
 
@@ -305,7 +323,7 @@ exports.getRankingProduct = async function (req, res) {
             result: rankingRows,
             isSuccess: true,
             code: 200,
-            message: "실시간 랭킹 top 3 조회 성공"
+            message: "실시간 랭킹 조회 성공"
         });
     } catch (err) {
         logger.error(`App - RankingProduct Query error\n: ${JSON.stringify(err)}`);
@@ -413,6 +431,89 @@ exports.getBrands = async function (req, res) {
         });
     } catch (err) {
         logger.error(`App - BrandList Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.07
+ * 18. 추천상품 탭 API
+ */
+exports.getRecommendTab = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    let condition;
+    const {
+        filter
+    } = req.query;
+
+    if (filter != 1 && filter != 2) res.json({ isSuccess: false, code: 300, message: "존재하지 않는 필터링" }); 
+    if (filter === 1) { condition = 'order by r.createdAt desc'; }
+    else { condition = 'order by maxSaleRatio desc'; };
+
+    try {
+        const recommendRows = await productDao.getRecomTab(condition);
+
+        if (!recommendRows) {
+            return res.json({
+            isSuccess: false,
+            code: 301,
+            message: "추천상품 탭 조회 실패"
+            });
+        };
+
+        res.json({
+            result: recommendRows,
+            isSuccess: true,
+            code: 200,
+            message: "추천상품 탭 조회 성공"
+        }); 
+    } catch (err) {
+        logger.error(`App - RecommendTab Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.07
+ * 19. 추천상품 게시글 조회 API
+ */
+exports.getRecommendPost = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    let condition;
+    const {
+        recommendId
+    } = req.params;
+    let {
+        page, size
+    } = req.query;
+
+    if (!page) return res.json({ isSuccess: false, code: 300, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 301, message: "사이즈 입력 필요" });
+    if (page < 1) return res.json({ isSuccess: false, code: 302, message: "페이지 번호 확인" });
+    if (await productDao.checkRecommend(recommendId) === 0) return res.json({ isSuccess: false, code: 303, message: "존재하지 않는 추천상품 게시글" });    
+
+    page = size * (page-1);
+
+    try {
+        const imageRows = await productDao.getRecomImage(recommendId);
+        const recommendRows = await productDao.getRecomPost(recommendId, page, size);
+
+        if (!recommendRows) {
+            return res.json({
+            isSuccess: false,
+            code: 304,
+            message: "추천상품 게시글 조회 실패"
+            });
+        };
+
+        res.json({
+            result: {image: imageRows, productList: recommendRows},
+            isSuccess: true,
+            code: 200,
+            message: "추천상품 게시글 조회 성공"
+        }); 
+    } catch (err) {
+        logger.error(`App - RecommendPost Query error\n: ${JSON.stringify(err)}`);
         return false;
     }
 }
