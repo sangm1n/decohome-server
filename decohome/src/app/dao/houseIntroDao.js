@@ -16,7 +16,7 @@ async function getAllHouseIntro(page, size, condition, typeCond, pyungCond, styl
         join (select houseIntroId,
         tagStatus,
         group_concat(distinct hashTagId order by tagStatus separator '/')   as hashTagId,
-        group_concat(distinct hashTagName order by tagStatus separator '/') as hashTagName
+        group_concat(distinct concat('#', hashTagName) order by tagStatus separator ' ') as hashTagName
         from HashTag ht
         group by houseIntroId) w on w.houseIntroId = hi.houseIntroId
         where si.isThumbnailed = 'Y'
@@ -159,6 +159,26 @@ async function checkHouseIntro(houseIntroId) {
   }
 }
 
+async function checkSpace(spaceId) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const checkSpaceQuery = `
+      select exists(select * from SpaceImage where spaceId = '` + spaceId + `') as exist;
+      `;
+      const checkSpaceParams = [spaceId];
+      const [checkSpaceRows] = await connection.query(
+        checkSpaceQuery,
+        checkSpaceParams
+      );
+      connection.release();
+      
+      return checkSpaceRows[0].exist;
+  } catch (err) {
+      logger.error(`App - checkSpace DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
 // 집소개 수 조회
 async function getIntroCount(typeCond, pyungCond, styleCond) {
   try {
@@ -197,17 +217,17 @@ async function getIntroInfo(houseIntroId) {
       si.spaceImage,
       date_format(hi.createdAt, '%Y.%c.%d %H:%i')          as createdAt,
       concat('조회수 ', format(hi.viewCount, 0))              as countView,
-      concat('보관함 ', format(ifnull(v.countComment, 0), 0)) as countComment,
-      concat('댓글 ', format(ifnull(w.countLocker, 0), 0))   as countLocker,
-      u.name, u.facebook, u.instagram, u.rss
+      concat('보관함 ', format(ifnull(w.countLocker, 0), 0)) as countLocker,
+      concat('댓글 ', format(ifnull(v.countComment, 0), 0))   as countComment,
+      ifnull(u.name, -1) as name, ifnull(u.facebook, -1) as facebook, ifnull(u.instagram, -1) as instagram, ifnull(u.rss, -1) as rss
       from HouseIntro hi
       left join (select hi.houseIntroId, count(commentId) as countComment
       from Comment c
       join HouseIntro hi on hi.houseIntroId = c.houseIntroId
       group by c.houseIntroId) v on hi.houseIntroId = v.houseIntroId
       left join (select hi.houseIntroId, count(lockerId) as countLocker
-      from Locker l
-      join HouseIntro hi on hi.houseIntroId = l.houseIntroId) w
+      from UserLocker ul
+      join HouseIntro hi on hi.houseIntroId = ul.houseIntroId) w
       on hi.houseIntroId = w.houseIntroId
       join SpaceImage si on hi.houseIntroId = si.houseIntroId
       join User u on u.userId = hi.userId
@@ -252,9 +272,13 @@ async function getIntroPost(houseIntroId) {
   try {
       const connection = await pool.getConnection(async (conn) => conn);
       const getIntroPostQuery = `
-      select spaceId, spaceImage, content from HouseIntroText hit
-      join SpaceImage si on hit.houseIntroId = si.houseIntroId
-      where hit.isDeleted = 'N' and si.isDeleted = 'N' and hit.houseIntroId = ` + houseIntroId + `;
+      select v.spaceId, v.spaceImage, w.content
+      from (select houseIntroId, spaceId, spaceImage, ROW_NUMBER() OVER (PARTITION BY houseIntroId) as imageRN
+      from SpaceImage) v
+      join (select houseIntroId, content, ROW_NUMBER() OVER (PARTITION BY houseIntroId) as textRN
+      from HouseIntroText) w on v.houseIntroId = w.houseIntroId
+      where v.houseIntroId = ` + houseIntroId + `
+      and v.imageRN = w.textRN;
       `;
       const getIntroPostParams = [houseIntroId];
       const [introPostRows] = await connection.query(
@@ -330,6 +354,207 @@ async function getSpaceTotalCount(spaceCond, pyungCond, styleCond) {
   }
 }
 
+// 공간 게시글 조회
+async function getIntroId(spaceId) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const getIntroIdQuery = `
+      select houseIntroId from SpaceImage where spaceId = ?;
+      `;
+      const getIntroIdParams = [spaceId];
+      const [houseInfoRows] = await connection.query(
+        getIntroIdQuery,
+        getIntroIdParams
+      );
+      connection.release();
+      
+      return houseInfoRows[0];
+  } catch (err) {
+      logger.error(`App - getIntroId DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
+async function getHouseId(houseId) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const getIntroIdQuery = `
+      select hi.houseIntroId, title, spaceImage
+      from HouseIntro hi
+      join SpaceImage si on hi.houseIntroId = si.houseIntroId
+      where hi.isDeleted = 'N'
+      and isThumbnailed = 'Y'
+      and si.isDeleted = 'N'
+      and hi.houseIntroId = ` + houseId + `;
+      `;
+      const getIntroIdParams = [houseId];
+      const [houseInfoRows] = await connection.query(
+        getIntroIdQuery,
+        getIntroIdParams
+      );
+      connection.release();
+      
+      return houseInfoRows[0];
+  } catch (err) {
+      logger.error(`App - getIntroId DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
+async function getHouseInfo(spaceId) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const getHouseInfoQuery = `
+      select hi.houseIntroId, title, spaceImage
+      from HouseIntro hi
+      join SpaceImage si on hi.houseIntroId = si.houseIntroId
+      where hi.isDeleted = 'N'
+      and si.isDeleted = 'N'
+      and spaceId = ` + spaceId + `;
+      `;
+      const getHouseInfoParams = [spaceId];
+      const [houseInfoRows] = await connection.query(
+        getHouseInfoQuery,
+        getHouseInfoParams
+      );
+      connection.release();
+      
+      return houseInfoRows[0];
+  } catch (err) {
+      logger.error(`App - getHouseInfo DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
+async function getTag(houseIntroId) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const getTagQuery = `
+      select distinct hashTagId, hashTagName
+      from HashTag
+      where houseIntroId = ` + houseIntroId + `;
+      `;
+      const getTagParams = [houseIntroId];
+      const [tagRows] = await connection.query(
+        getTagQuery,
+        getTagParams
+      );
+      connection.release();
+      
+      return tagRows;
+  } catch (err) {
+      logger.error(`App - getTag DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
+async function getSpaceInfo(spaceId) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const getSpaceInfoQuery = `
+      select spaceImage,
+      concat('조회수 ', format(viewCount, 0))       as viewCount,
+      concat('보관함 ', format(count(lockerId), 0)) as lockerCount
+      from SpaceImage si
+      left join UserLocker ul on si.spaceId = ul.spaceId
+      where si.spaceId = ?;
+      `;
+      const getSpaceInfoParams = [spaceId];
+      const [productRows] = await connection.query(
+        getSpaceInfoQuery,
+        getSpaceInfoParams
+      );
+      connection.release();
+
+      return productRows[0];
+  } catch (err) {
+      logger.error(`App - getSpaceInfo DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
+async function getSpaceProducts(spaceId, page, size) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const getSpaceProductsQuery = `
+      select p.productId,
+      brandName,
+      productName,
+      concat(format(originalPrice, 0), '원')                                                 as originalPrice,
+      if(salePrice = -1, -1, concat(format(salePrice, 0), '원'))                             as salePrice,
+      if(p.isSoldedOut = 'Y', '품절',
+      if(salePrice = -1, -1, concat(round((1 - salePrice / originalPrice) * 100), '%'))) as saleRatio,
+      productImage
+      from Product p
+      join Brand b on p.brandId = b.brandId
+      join ProductImage pi on p.productId = pi.productId
+      where pi.isThumbnailed = 'Y'
+      and p.isDeleted = 'N'
+      and spaceId = ` + spaceId + `
+      limit ` + page + `, ` + size + `;
+      `;
+      const getSpaceProductsParams = [spaceId, page, size];
+      const [productRows] = await connection.query(
+        getSpaceProductsQuery,
+        getSpaceProductsParams
+      );
+      connection.release();
+      
+      return productRows;
+  } catch (err) {
+      logger.error(`App - getSpaceProducts DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
+async function getSpaceOtherTag(houseIntroId) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const getSpaceOthersQuery = `
+      select distinct si.spaceTagId, spaceTagName
+      from SpaceImage si
+      join SpaceTag st
+      on si.spaceTagId = st.spaceTagId
+      join HouseIntro hi on si.houseIntroId = hi.houseIntroId
+      where hi.houseIntroId = ?;
+      `;
+      const getSpaceOthersParams = [houseIntroId];
+      const [spaceRows] = await connection.query(
+        getSpaceOthersQuery,
+        getSpaceOthersParams
+      );
+      connection.release();
+      
+      return spaceRows;
+  } catch (err) {
+      logger.error(`App - getSpaceOtherTag DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
+async function getSpaceOtherImage(houseIntroId, page, size) {
+  try {
+      const connection = await pool.getConnection(async (conn) => conn);
+      const getSpaceOthersQuery = `
+      select spaceId, spaceImage
+      from SpaceImage
+      where houseIntroId = ` + houseIntroId + `
+      limit ` + page + `, ` + size + `;
+      `;
+      const getSpaceOthersParams = [houseIntroId, page, size];
+      const [spaceRows] = await connection.query(
+        getSpaceOthersQuery,
+        getSpaceOthersParams
+      );
+      connection.release();
+      
+      return spaceRows;
+  } catch (err) {
+      logger.error(`App - getSpaceOtherImage DB Connection error\n: ${err.message}`);
+      return res.status(500).send(`Error: ${err.message}`);
+  }
+}
+
 
 module.exports = {
   getAllHouseIntro,
@@ -339,10 +564,19 @@ module.exports = {
   checkStyleTag,
   checkSpaceTag,
   checkHouseIntro,
+  checkSpace,
   getIntroCount,
   getIntroInfo,
   getIntroTag,
   getIntroPost,
   getSpace,
   getSpaceTotalCount,
+  getHouseInfo,
+  getTag,
+  getSpaceInfo,
+  getSpaceProducts,
+  getSpaceOtherTag,
+  getSpaceOtherImage,
+  getIntroId,
+  getHouseId,
 };

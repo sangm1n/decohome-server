@@ -192,7 +192,7 @@ exports.getProduct = async function (req, res) {
         
         const category = await productDao.getCategoryName(condition, 4);
         const imageRows = await productDao.getProductImage(productId);
-        const productRows = await productDao.getProductInfo(productId);      
+        const productRows = await productDao.getProductInfo(productId);   
         
         if (!category) return res.json({ isSuccess: false, code: 301, message: "카테고리 조회 실패" });
         if (!imageRows) return res.json({ isSuccess: false, code: 302, message: "상품 이미지 조회 실패" });
@@ -332,8 +332,46 @@ exports.getRankingProduct = async function (req, res) {
 }
 
 /**
+ * update - 2020.11.10
+ * 15. 단독 세일 상품 조회 API
+ */
+exports.getOnlySale = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+
+    let {
+        page, size
+    } = req.query;
+    
+    if (!page) return res.json({ isSuccess: false, code: 300, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 301, message: "사이즈 입력 필요" });
+    page = size * (page-1);
+
+    try {
+        const saleProductRows = await productDao.getOnlySaleProduct(page, size);
+
+        if (!saleProductRows) {
+            return res.json({
+            isSuccess: false,
+            code: 302,
+            message: "단독 세일 상품 조회 실패"
+            });
+        };
+
+        res.json({
+            result: saleProductRows,
+            isSuccess: true,
+            code: 200,
+            message: "단독 세일 상품 조회 성공"
+        });
+    } catch (err) {
+        logger.error(`App - getOnlySale Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
  * update - 2020.11.05
- * 16. 카테고리 조회 API
+ * 16. 카테고리 목록 조회 API
  */
 exports.getCategory = async function (req, res) {
     const userId = req.verifiedToken.userId;
@@ -386,9 +424,15 @@ exports.getCategory = async function (req, res) {
 exports.getBrands = async function (req, res) {
     const userId = req.verifiedToken.userId;
     let condition;
-    const {
-        filter 
+    let {
+        page, size, filter 
     } = req.query;
+
+    if (!page) return res.json({ isSuccess: false, code: 300, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 301, message: "사이즈 입력 필요" });
+    if (page < 1) return res.json({ isSuccess: false, code: 302, message: "페이지 번호 확인" });
+
+    page = size * (page-1);
 
     switch (filter) {
         case '1':
@@ -401,11 +445,11 @@ exports.getBrands = async function (req, res) {
             condition = 'b.createdAt desc';
             break;
         default:
-            return res.json({ isSuccess: false, code: 300, message: "존재하지 않는 필터링" });
+            return res.json({ isSuccess: false, code: 303, message: "존재하지 않는 필터링" });
     }
 
     try {
-        const brandRows = await productDao.getBrandList(condition);
+        const brandRows = await productDao.getBrandList(page, size, condition);
         let arr = "";
         for (let i = 0; i < brandRows.length; i++) {
             if (i !== brandRows.length-1)
@@ -413,12 +457,12 @@ exports.getBrands = async function (req, res) {
             else
                 arr += brandRows[i].brandId;
         }
-        const brandImageRows = await productDao.getBrandImage(arr);
+        const brandImageRows = await productDao.getBrandImage(arr, size);
 
         if (!brandRows) {
             return res.json({
             isSuccess: false,
-            code: 301,
+            code: 304,
             message: "전체 브랜드 목록 조회 실패"
             });
         };
@@ -436,8 +480,69 @@ exports.getBrands = async function (req, res) {
 }
 
 /**
+ * update - 2020.11.09
+ * 18. 브랜드 내 상품 조회 API
+ */
+exports.getBrandProduct = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    let condition;
+    let {
+        page, size, filter 
+    } = req.query;
+    const {
+        brandId
+    } = req.params;
+
+    if (!page) return res.json({ isSuccess: false, code: 300, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 301, message: "사이즈 입력 필요" });
+    if (page < 1) return res.json({ isSuccess: false, code: 302, message: "페이지 번호 확인" });
+    if (await productDao.checkBrand(brandId) === 0) return res.json({ isSuccess: false, code: 303, message: "존재하지 않는 브랜드" });
+
+    page = size * (page-1);
+
+    switch (filter) {
+        case '1':
+            condition = 'rand(100)';
+            break;
+        case '2':
+            condition = 'p.createdAt desc';
+            break;
+        case '3':
+            condition = 'v.countReview desc';
+            break;
+        default:
+            return res.json({ isSuccess: false, code: 304, message: "존재하지 않는 필터링" });
+    }
+
+    try {
+        const cateCond = priceCond = '';
+        const brandCond = 'and p.brandId = ' + brandId;
+        const brandRows = await productDao.getBrandInfo(brandId);
+        const productRows = await productDao.getAllProducts(condition, page, size, cateCond, brandCond, priceCond);
+
+        if (!productRows) {
+            return res.json({
+            isSuccess: false,
+            code: 305,
+            message: "브랜드 내 상품 조회 실패"
+            });
+        };
+
+        res.json({
+            result: {brand: brandRows[0], productList: productRows},
+            isSuccess: true,
+            code: 200,
+            message: "브랜드 내 상품 조회 성공"
+        });
+    } catch (err) {
+        logger.error(`App - BrandProduct Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
  * update - 2020.11.07
- * 18. 추천상품 탭 API
+ * 19. 추천상품 탭 API
  */
 exports.getRecommendTab = async function (req, res) {
     const userId = req.verifiedToken.userId;
@@ -475,7 +580,7 @@ exports.getRecommendTab = async function (req, res) {
 
 /**
  * update - 2020.11.07
- * 19. 추천상품 게시글 조회 API
+ * 20. 추천상품 게시글 조회 API
  */
 exports.getRecommendPost = async function (req, res) {
     const userId = req.verifiedToken.userId;

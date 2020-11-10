@@ -10,7 +10,7 @@ const { constants } = require('buffer');
 
 /**
  * update - 2020.11.07
- * 18. 전체 집소개 조회 API
+ * 21. 전체 집소개 조회 API
  */
 exports.getHouseIntro = async function (req, res) {
     const userId = req.verifiedToken.userId;
@@ -78,7 +78,7 @@ exports.getHouseIntro = async function (req, res) {
 
 /**
  * update - 2020.11.08
- * 19. 전체 집소개 수 조회 API
+ * 22. 집소개 수 조회 API
  */
 exports.getHouseIntroCount = async function (req, res) {
     const userId = req.verifiedToken.userId;
@@ -120,7 +120,7 @@ exports.getHouseIntroCount = async function (req, res) {
 
 /**
  * update - 2020.11.08
- * 20. 집소개 게시글 조회 API
+ * 23. 집소개 게시글 조회 API
  */
 exports.getHouseIntroPost = async function (req, res) {
     const userId = req.verifiedToken.userId;
@@ -153,7 +153,7 @@ exports.getHouseIntroPost = async function (req, res) {
 
 /**
  * update - 2020.11.08
- * 21. 전체 공간 조회 API
+ * 24. 전체 공간 조회 API
  */
 exports.getAllSpace = async function (req, res) {
     const userId = req.verifiedToken.userId;
@@ -221,7 +221,7 @@ exports.getAllSpace = async function (req, res) {
 
 /**
  * update - 2020.11.08
- * 22. 공간 수 조회 API
+ * 25. 공간 수 조회 API
  */
 exports.getSpaceCount = async function (req, res) {
     const userId = req.verifiedToken.userId;
@@ -270,6 +270,126 @@ exports.getSpaceCount = async function (req, res) {
         });
     } catch (err) {
         logger.error(`App - SpaceCount Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.10
+ * 26. 공간 게시글 조회 API
+ */
+exports.getSpacePost = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        spaceId
+    } = req.params;
+
+    if (await houseIntroDao.checkSpace(spaceId) === 0) return res.json({ isSuccess: false, code: 300, message: "존재하지 않는 공간 게시글" });
+
+    try {
+        const idRows = await houseIntroDao.getHouseInfo(spaceId);
+        const houseInfoRows = await houseIntroDao.getHouseId(idRows.houseIntroId);
+        const tagRows = await houseIntroDao.getTag(houseInfoRows.houseIntroId);
+        const spaceRows = await houseIntroDao.getSpaceInfo(spaceId);
+
+        if (!houseInfoRows) return res.json({ isSuccess: false, code: 301, message: "집소개 정보 조회 실패" });
+        if (!tagRows) return res.json({ isSuccess: false, code: 302, message: "태그 조회 실패" });
+        if (!spaceRows) return res.json({ isSuccess: false, code: 303, message: "공간 게시글 조회 실패" });
+
+        res.json({
+            result: {houseInfo: houseInfoRows, tagList: tagRows, spaceInfo: spaceRows},
+            isSuccess: true,
+            code: 200,
+            message: "공간 게시글 조회 성공"
+        });
+    } catch (err) {
+        logger.error(`App - SpacePost Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.10
+ * 27. 공간에 포함된 상품 조회 API
+ */
+exports.getSpaceProduct = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        spaceId
+    } = req.params;
+    let {
+        page, size
+    } = req.query;
+
+    if (!page) return res.json({ isSuccess: false, code: 300, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 301, message: "사이즈 입력 필요" });
+    page = size * (page-1);
+
+    if (await houseIntroDao.checkSpace(spaceId) === 0) return res.json({ isSuccess: false, code: 302, message: "존재하지 않는 공간 게시글" });
+
+    try {
+        const productRows = await houseIntroDao.getSpaceProducts(spaceId, page, size);
+
+        if (!productRows) {
+            return res.json({
+            isSuccess: false,
+            code: 303,
+            message: "공간에 포함된 상품 조회 실패"
+            });
+        };
+
+        res.json({
+            result: productRows,
+            isSuccess: true,
+            code: 200,
+            message: "공간에 포함된 상품 조회 성공"
+        });
+    } catch (err) {
+        logger.error(`App - SpacePost Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.10
+ * 28. 이 집의 다른 공간 조회 API
+ */
+exports.getSpaceOther = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        spaceId
+    } = req.params;
+    let {
+        page, size
+    } = req.query;
+
+    if (!page) return res.json({ isSuccess: false, code: 300, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 301, message: "사이즈 입력 필요" });
+    page = size * (page-1);
+
+    if (await houseIntroDao.checkSpace(spaceId) === 0) return res.json({ isSuccess: false, code: 302, message: "존재하지 않는 공간 게시글" });
+
+    try {
+        const houseInfoRows = await houseIntroDao.getIntroId(spaceId);
+        const tagRows = await houseIntroDao.getSpaceOtherTag(spaceId);
+        const imageRows = await houseIntroDao.getSpaceOtherImage(houseInfoRows.houseIntroId, page, size);
+
+        if (!houseInfoRows) {
+            return res.json({
+            isSuccess: false,
+            code: 303,
+            message: "이 집의 다른 공간 조회 실패"
+            });
+        };
+
+        res.json({
+            result: {tagList: tagRows, imageList: imageRows},
+            isSuccess: true,
+            code: 200,
+            message: "이 집의 다른 공간 조회 성공"
+        });
+    } catch (err) {
+        logger.error(`App - SpacePost Query error\n: ${JSON.stringify(err)}`);
         return false;
     }
 }

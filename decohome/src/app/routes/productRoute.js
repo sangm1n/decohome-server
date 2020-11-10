@@ -6,10 +6,12 @@ module.exports = function(app){
     app.route('/recommend/:recommendId').get(jwtMiddleware, product.getRecommendPost);
     app.route('/products').get(jwtMiddleware, product.getProducts);
     app.route('/brands').get(jwtMiddleware, product.getBrands);
+    app.route('/brands/:brandId').get(jwtMiddleware, product.getBrandProduct);
     app.route('/category').get(jwtMiddleware, product.getCategory);
     app.route('/products/count').get(jwtMiddleware, product.getProductCount);
     app.route('/products/new').get(jwtMiddleware, product.getNewProduct);
     app.route('/products/rank').get(jwtMiddleware, product.getRankingProduct);
+    app.route('/products/sale').get(jwtMiddleware, product.getOnlySale);
     app.route('/products/:productId').get(jwtMiddleware, product.getProduct);
     app.route('/products/:productId/info').get(jwtMiddleware, product.getProductDetail);
 };

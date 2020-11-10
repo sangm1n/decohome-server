@@ -181,22 +181,22 @@ async function getProductInfo(productId) {
     try {
         const connection = await pool.getConnection(async (conn) => conn);
         const getProductInfoQuery = `   
-        select if(p.isSoldedOut = 'Y', '품절', -1)                                                                          as isSoldedOut,
-        if(isFreeShipped = 'Y', '무료배송', -1)                                                                        as isFreeShipped,
-        if(isLowestPrice = 'Y', '최저가', -1)                                                                         as isLowestPrice,
-        if(isOnlyLowest = 'Y', '단독 최저가', -1)                                                                       as isOnlyLowest,
+        select if(p.isSoldedOut = 'Y', '품절', -1)                                                   as isSoldedOut,
+        if(isFreeShipped = 'Y', '무료배송', -1)                                                     as isFreeShipped,
+        if(isLowestPrice = 'Y', '최저가', -1)                                                       as isLowestPrice,
+        if(isOnlyLowest = 'Y', '단독 최저가', -1)                                                    as isOnlyLowest,
         ifnull(v.averageScore, 0)                                                                             as averageScore,
-        ifnull(v.countReview, 0)                                                                                      as countReview,
+        ifnull(v.countReview, 0)                                                                          as countReview,
         brandName,
         productName,
         if(p.isSoldedOut = 'Y', -1,
         if(salePrice = -1, -1,
         concat(round((1 - salePrice / originalPrice) * 100), '%')))                                            as saleRatio,
         if(p.isSoldedOut = 'Y', -1,
-        if(salePrice = -1, -1, concat(format(salePrice, 0), '원')))                                                           as salePrice,
-        format(originalPrice, 0)                                                                                     as originalPrice,
+        if(salePrice = -1, -1, concat(format(salePrice, 0), '원')))                            as salePrice,
+        format(originalPrice, 0)                                                                as originalPrice,
         if(salePrice = -1, concat('최대 ', round(originalPrice * 0.02, 0), '원 적립'),
-        concat('최대 ', format(round(salePrice * 0.02, 0), 0), '원 적립'))                                           as accumulate,
+        concat('최대 ', format(round(salePrice * 0.02, 0), 0), '원 적립'))                            as accumulate,
         shippingPrice,
         if(arrivalDate = -1, -1, if(arrivalWeekend = 'Y', concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 포함)'),
         concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 미포함)')))                         as arrivalDate,
@@ -204,15 +204,15 @@ async function getProductInfo(productId) {
         when payMethod = 'P' then '선불'
         when payMethod = 'C' then '착불'
         when payMethod = 'I'
-        then '선불 (+설치비)' end                                                                                 as payMethod,
+        then '선불 (+설치비)' end                                                                 as payMethod,
         case
         when shippingType = 'A' then '택배'
         when shippingType = 'B' then '일반배송'
         when shippingType = 'C' then '화물배송'
         when shippingType = 'D' then '직접배송'
-        end                                                                                                      as shippingType,
+        end                                                                                         as shippingType,
         if(mountainous = -1, '상세하단 참고',
-        concat('배송비 별도 추가 (제주도 : ', format(mountainous, 0), '원'))                                                 as mountainous
+        concat('배송비 별도 추가 (제주도 : ', format(mountainous, 0), '원)'))                       as mountainous
         from Product p
         join Brand b on p.brandId = b.brandId
         left join (select p.productId,
@@ -260,6 +260,26 @@ async function checkProduct(productId) {
     }
 }
 
+async function checkBrand(brandId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const checkBrandQuery = `
+        select exists (select brandId from Brand where brandId = ?) as exist;
+        `;
+        const checkBrandParams = [brandId];
+        const [checkBrandRows] = await connection.query(
+            checkBrandQuery,
+            checkBrandParams
+        );
+        connection.release();
+        
+        return checkBrandRows[0].exist;
+    } catch (err) {
+        logger.error(`App - checkBrand DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
 // 상품 정보 조회
 async function getProductDetail(productId) {
     try {
@@ -274,7 +294,7 @@ async function getProductDetail(productId) {
         );
         connection.release();
         
-        return productRows;
+        return productRows[0];
     } catch (err) {
         logger.error(`App - getProductImage DB Connection error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);
@@ -282,7 +302,7 @@ async function getProductDetail(productId) {
 }
 
 // 브랜드 목록
-async function getBrandList(condition) {
+async function getBrandList(page, size, condition) {
     try {
         const connection = await pool.getConnection(async (conn) => conn);
         const getBrandListQuery = `
@@ -290,9 +310,10 @@ async function getBrandList(condition) {
         from Brand b
         join Product p on b.brandId = p.brandId
         where b.isDeleted = 'N'
-        and p.isDeleted = 'N' group by b.brandId order by ` + condition + `;
+        and p.isDeleted = 'N' group by b.brandId order by ` + condition + `
+        limit ` + page + `, ` + size + `;
         `;
-        const getBrandListParams = [condition]
+        const getBrandListParams = [page, size, condition]
         const brandRows = await connection.query(
             getBrandListQuery,
             getBrandListParams
@@ -306,7 +327,7 @@ async function getBrandList(condition) {
     }
 }
 
-async function getBrandImage(arr) {
+async function getBrandImage(arr, size) {
     try {
         const connection = await pool.getConnection(async (conn) => conn);
         const getBrandListQuery = `
@@ -315,11 +336,12 @@ async function getBrandImage(arr) {
         join (select p.productId, brandId, productImage, row_number() over (partition by brandId order by rand(100)) as rn
         from Product p
         join ProductImage pi on p.productId = pi.productId
-        where p.isDeleted = 'N') v
+        where p.isDeleted = 'N' group by p.productId) v
         on b.brandId = v.brandId
-        where v.rn <= 3 order by field(b.brandId, ` + arr + `);
+        where v.rn <= 3 order by field(b.brandId, ` + arr + `, b.brandId)
+        limit ` + size*3 + `;
         `;
-        const getBrandListParams = [arr]
+        const getBrandListParams = [arr, size]
         const brandRows = await connection.query(
             getBrandListQuery,
             getBrandListParams
@@ -329,6 +351,31 @@ async function getBrandImage(arr) {
         return brandRows[0];
     } catch (err) {
         logger.error(`App - getBrandImage DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function getBrandInfo(brandId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const getBrandInfoQuery = `
+        select brandName, brandThumbnail, brandIntro, count(productId) as countProduct
+        from Brand b
+        join Product p on b.brandId = p.brandId
+        where p.isDeleted = 'N'
+        and b.isDeleted = 'N'
+        and p.brandId = ?;
+        `;
+        const getBrandInfoParams = [brandId]
+        const brandRows = await connection.query(
+            getBrandInfoQuery,
+            getBrandInfoParams
+        );
+        connection.release();
+        
+        return brandRows[0];
+    } catch (err) {
+        logger.error(`App - getBrandInfo DB Connection error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);
     }
 }
@@ -402,6 +449,48 @@ async function getRankingProduct(page, size, cateCond) {
         return rankProductRows;
     } catch (err) {
         logger.error(`App - getRankingProduct DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+// 단독 세일 상품
+async function getOnlySaleProduct(page, size) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const getOnlySaleProductQuery = `
+        select p.productId,
+        brandName,
+        productName,
+        concat(format(salePrice, 0), '원')                         as salePrice,
+        concat(round((1 - salePrice / originalPrice) * 100), '%') as saleRatio,
+        productImage
+        from Product p
+        join Category c on p.categoryId = c.categoryId
+        join Brand b on p.brandId = b.brandId
+        join ProductImage pi on p.productId = pi.productId
+        left join (select count(reviewId) as countReview, pr.productId
+        from ProductReview pr
+        join Product p on pr.productId = p.productId
+        where pr.isDeleted = 'N'
+        group by pr.productId) v on p.productId = v.productId
+        where pi.isThumbnailed = 'Y'
+        and p.isSoldedOut = 'N'
+        and salePrice != -1
+        and p.isDeleted = 'N'
+        and p.isOnlyLowest = 'Y'
+        order by v.countReview desc
+        limit ` + page + `, ` + size + `;
+        `;
+        const getOnlySaleProductParams = [page, size];
+        const [rankProductRows] = await connection.query(
+            getOnlySaleProductQuery,
+            getOnlySaleProductParams
+        );
+        connection.release();
+        
+        return rankProductRows;
+    } catch (err) {
+        logger.error(`App - getOnlySaleProduct DB Connection error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);
     }
 }
@@ -528,9 +617,12 @@ module.exports = {
     getProductInfo,
     checkProduct,
     getBrandImage,
+    getBrandInfo,
+    checkBrand,
     getProductDetail,
     getNewProductItem,
     getRankingProduct,
+    getOnlySaleProduct,
     getRecomTab,
     getRecomPost,
     checkRecommend,

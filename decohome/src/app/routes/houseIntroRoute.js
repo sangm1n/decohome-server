@@ -7,4 +7,7 @@ module.exports = function(app){
     app.route('/houseintro/:houseIntroId').get(jwtMiddleware, houseIntro.getHouseIntroPost);
     app.route('/spaces').get(jwtMiddleware, houseIntro.getAllSpace);
     app.route('/spaces/count').get(jwtMiddleware, houseIntro.getSpaceCount);
+    app.route('/spaces/:spaceId').get(jwtMiddleware, houseIntro.getSpacePost);
+    app.route('/spaces/:spaceId/product').get(jwtMiddleware, houseIntro.getSpaceProduct);
+    app.route('/spaces/:spaceId/other').get(jwtMiddleware, houseIntro.getSpaceOther);
 };
