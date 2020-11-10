@@ -57,9 +57,7 @@ exports.signUp = async function (req, res) {
         // TRANSACTION : advanced
         // await connection.beginTransaction(); // START TRANSACTION
         const hashedPassword = await crypto.createHash('sha512').update(password).digest('hex');
-        const insertUserInfoParams = [email, hashedPassword, nickname, phone];
-        
-        const insertUserRows = await userDao.insertUserInfo(insertUserInfoParams);
+        await userDao.insertUserInfo(email, hashedPassword, nickname, phone);
 
         //  await connection.commit(); // COMMIT
         // connection.release();

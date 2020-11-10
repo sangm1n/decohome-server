@@ -41,20 +41,44 @@ async function userNicknameCheck(nickname) {
     }
 }
 
-async function insertUserInfo(insertUserInfoParams) {
+async function insertUserInfo(email, hashedPassword, nickname, phone) {
     try {
         const connection = await pool.getConnection(async (conn) => conn);
-        const insertUserInfoQuery = `
-        insert into User (email, password, nickname, phone)
-        values (?, ?, ?, ?);
-        `;
-        const insertUserInfoRow = await connection.query(
-        insertUserInfoQuery,
-        insertUserInfoParams
-        );
-        connection.release();
-        
-        return insertUserInfoRow;
+        try {
+            await connection.beginTransaction();
+            const insertUserInfoQuery = `
+            insert into User (email, password, nickname, phone) values (?, ?, ?, ?);
+            `;
+            const insertUserInfoParams = [email, hashedPassword, nickname, phone];
+            const insertUserInfoRow = await connection.query(
+            insertUserInfoQuery,
+            insertUserInfoParams
+            );
+            const getUserIdQuery = `
+            select userId from User where email = ?;
+            `
+            const [getUserInfoRow] = await connection.query(
+                getUserIdQuery, email
+            );
+            const insertUserLockerQuery = `
+            insert into Locker (userId, lockerName, isPrivated)
+            values (?, '매거진', default ), (?, '가구 & 소품', default);
+            `
+            const insertUserLockerParams = [getUserInfoRow[0].userId, getUserInfoRow[0].userId];
+            await connection.query(
+                insertUserLockerQuery, 
+                insertUserLockerParams
+            )
+            await connection.commit();
+            connection.release();
+            
+            return insertUserInfoRow;
+        } catch (err) {
+            await connection.rollback();
+            connection.release();
+            logger.error(`App - InsertUserInfo Transaction error\n: ${err.message}`);
+            return res.status(500).send(`Error: ${err.message}`);
+        }
     } catch (err) {
         logger.error(`App - InsertUserInfo DB Connection error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);
