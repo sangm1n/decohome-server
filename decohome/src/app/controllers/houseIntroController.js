@@ -30,6 +30,7 @@ exports.getHouseIntro = async function (req, res) {
         case '1': condition += 'hi.createdAt desc'; break;
         case '2': condition += 'countComment desc'; break;
         case '3': condition += 'rand(100)'; break;
+        case '4': condition += 'hi.viewCount desc'; break;
         default: return res.json({ isSuccess: false, code: 303, message: "존재하지 않는 필터링" });
     }
 
@@ -133,7 +134,7 @@ exports.getHouseIntroPost = async function (req, res) {
     try {
         const introInfoRows = await houseIntroDao.getIntroInfo(houseIntroId);
         const introTagRows = await houseIntroDao.getIntroTag(houseIntroId);
-        const introPostRows = await houseIntroDao.getIntroPost(houseIntroId);
+        const introPostRows = await houseIntroDao.getIntroPost(userId, houseIntroId);
 
         if (!introInfoRows) return res.json({ isSuccess: false, code: 301, message: "집소개 게시글 정보 조회 실패" });
         if (!introTagRows) return res.json({ isSuccess: false, code: 302, message: "집소개 게시글 태그 조회 실패" });

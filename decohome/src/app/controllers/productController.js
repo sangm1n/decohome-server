@@ -192,7 +192,7 @@ exports.getProduct = async function (req, res) {
         
         const category = await productDao.getCategoryName(condition, 4);
         const imageRows = await productDao.getProductImage(productId);
-        const productRows = await productDao.getProductInfo(productId);   
+        const productRows = await productDao.getProductInfo(userId, productId);   
         
         if (!category) return res.json({ isSuccess: false, code: 301, message: "카테고리 조회 실패" });
         if (!imageRows) return res.json({ isSuccess: false, code: 302, message: "상품 이미지 조회 실패" });

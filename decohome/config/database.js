@@ -8,14 +8,16 @@ if (process.env.NODE_ENV === 'development') {
         host: 'soft-squared-1.cfnuvzhsqc7v.ap-northeast-2.rds.amazonaws.com',
         user: 'sangmin',
         password: 'dl362514',
-        database: 'DecohomeDevDB'
+        database: 'DecohomeDevDB',
+        multipleStatements: true
     });
 } else if (process.env.NODE_ENV === 'production') {
     pool = mysql.createPool({
         host: 'soft-squared-1.cfnuvzhsqc7v.ap-northeast-2.rds.amazonaws.com',
         user: 'sangmin',
         password: 'dl362514',
-        database: 'DecohomeProdDB'
+        database: 'DecohomeProdDB',
+        multipleStatements: true
     });
 }
 

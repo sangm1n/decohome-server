@@ -177,63 +177,92 @@ async function getProductImage(productId) {
     }
 }
 
-async function getProductInfo(productId) {
+async function getProductInfo(userId, productId) {
     try {
         const connection = await pool.getConnection(async (conn) => conn);
-        const getProductInfoQuery = `   
-        select if(p.isSoldedOut = 'Y', '품절', -1)                                                   as isSoldedOut,
-        if(isFreeShipped = 'Y', '무료배송', -1)                                                     as isFreeShipped,
-        if(isLowestPrice = 'Y', '최저가', -1)                                                       as isLowestPrice,
-        if(isOnlyLowest = 'Y', '단독 최저가', -1)                                                    as isOnlyLowest,
-        ifnull(v.averageScore, 0)                                                                             as averageScore,
-        ifnull(v.countReview, 0)                                                                          as countReview,
-        brandName,
-        productName,
-        if(p.isSoldedOut = 'Y', -1,
-        if(salePrice = -1, -1,
-        concat(round((1 - salePrice / originalPrice) * 100), '%')))                                            as saleRatio,
-        if(p.isSoldedOut = 'Y', -1,
-        if(salePrice = -1, -1, concat(format(salePrice, 0), '원')))                            as salePrice,
-        format(originalPrice, 0)                                                                as originalPrice,
-        if(salePrice = -1, concat('최대 ', round(originalPrice * 0.02, 0), '원 적립'),
-        concat('최대 ', format(round(salePrice * 0.02, 0), 0), '원 적립'))                            as accumulate,
-        shippingPrice,
-        if(arrivalDate = -1, -1, if(arrivalWeekend = 'Y', concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 포함)'),
-        concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 미포함)')))                         as arrivalDate,
-        case
-        when payMethod = 'P' then '선불'
-        when payMethod = 'C' then '착불'
-        when payMethod = 'I'
-        then '선불 (+설치비)' end                                                                 as payMethod,
-        case
-        when shippingType = 'A' then '택배'
-        when shippingType = 'B' then '일반배송'
-        when shippingType = 'C' then '화물배송'
-        when shippingType = 'D' then '직접배송'
-        end                                                                                         as shippingType,
-        if(mountainous = -1, '상세하단 참고',
-        concat('배송비 별도 추가 (제주도 : ', format(mountainous, 0), '원)'))                       as mountainous
-        from Product p
-        join Brand b on p.brandId = b.brandId
-        left join (select p.productId,
-        concat('리뷰 ', count(reviewId), '개') as countReview,
-        round(avg(score), 0)                as averageScore
-        from ProductReview pr
-        join Product p on p.productId = pr.productId
-        where pr.isDeleted = 'N'
-        group by pr.productId) v on p.productId = v.productId
-        join ProductShipping ps on p.productId = ps.productId
-        where p.productId = ?
-        and p.isDeleted = 'N';
-        `;
-        const getProductInfoParams = [productId];
-        const [productRows] = await connection.query(
-            getProductInfoQuery,
-            getProductInfoParams
-        );
-        connection.release();
-        
-        return productRows[0];
+        try {
+            connection.beginTransaction();
+            const getProductInfoQuery = `   
+            select if(p.isSoldedOut = 'Y', '품절', -1)                                                   as isSoldedOut,
+            if(isFreeShipped = 'Y', '무료배송', -1)                                                     as isFreeShipped,
+            if(isLowestPrice = 'Y', '최저가', -1)                                                       as isLowestPrice,
+            if(isOnlyLowest = 'Y', '단독 최저가', -1)                                                    as isOnlyLowest,
+            ifnull(v.averageScore, 0)                                                                             as averageScore,
+            ifnull(v.countReview, 0)                                                                          as countReview,
+            brandName,
+            productName,
+            if(p.isSoldedOut = 'Y', -1,
+            if(salePrice = -1, -1,
+            concat(round((1 - salePrice / originalPrice) * 100), '%')))                                            as saleRatio,
+            if(p.isSoldedOut = 'Y', -1,
+            if(salePrice = -1, -1, concat(format(salePrice, 0), '원')))                            as salePrice,
+            format(originalPrice, 0)                                                                as originalPrice,
+            if(salePrice = -1, concat('최대 ', round(originalPrice * 0.02, 0), '원 적립'),
+            concat('최대 ', format(round(salePrice * 0.02, 0), 0), '원 적립'))                            as accumulate,
+            shippingPrice,
+            if(arrivalDate = -1, -1, if(arrivalWeekend = 'Y', concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 포함)'),
+            concat('지금 주문 시, ', arrivalDate, '일 소요 예상 (주말 미포함)')))                         as arrivalDate,
+            case
+            when payMethod = 'P' then '선불'
+            when payMethod = 'C' then '착불'
+            when payMethod = 'I'
+            then '선불 (+설치비)' end                                                                 as payMethod,
+            case
+            when shippingType = 'A' then '택배'
+            when shippingType = 'B' then '일반배송'
+            when shippingType = 'C' then '화물배송'
+            when shippingType = 'D' then '직접배송'
+            end                                                                                         as shippingType,
+            if(mountainous = -1, '상세하단 참고',
+            concat('배송비 별도 추가 (제주도 : ', format(mountainous, 0), '원)'))                       as mountainous
+            from Product p
+            join Brand b on p.brandId = b.brandId
+            left join (select p.productId,
+            concat('리뷰 ', count(reviewId), '개') as countReview,
+            round(avg(score), 0)                as averageScore
+            from ProductReview pr
+            join Product p on p.productId = pr.productId
+            where pr.isDeleted = 'N'
+            group by pr.productId) v on p.productId = v.productId
+            join ProductShipping ps on p.productId = ps.productId
+            where p.productId = ?
+            and p.isDeleted = 'N';
+            `;
+            const getProductInfoParams = [productId];
+            const [productRows] = await connection.query(
+                getProductInfoQuery,
+                getProductInfoParams
+            );
+            const existQuery = `select exists(select userId from RecentView where userId = ` + userId + ` and productId = ` + productId + ` and isDeleted = 'N') as exist;`;
+            const insertQuery = `insert into RecentView (userId, houseIntroId, productId)
+            values (` + userId + `, default, ` + productId + `);`;
+            const selectQuery = `select if((select productId from RecentView where isDeleted = 'N' and userId = ` + userId + ` and productId = ` + productId + `) = -1, 0, 1) as exist;`;
+            const updateQuery = `update RecentView set updatedAt = default where productId = ` + productId + ` and userId = ` + userId + `;`;
+            const viewCountQuery = `update Product set viewCount = viewCount + 1 where productId = ` + productId + `;`
+            const params = [userId, productId];
+            const [existRows] = await connection.query(existQuery, params);
+            if (existRows[0].exist === 0) {
+                await connection.query(insertQuery, params);
+            } else {
+                const [selectRows] = await connection.query(selectQuery, params);
+                if (selectRows[0].exist === 1) {
+                    await connection.query(updateQuery, params);
+                } else {
+                    await connection.query(insertQuery, params);
+                }
+            }
+            await connection.query(viewCountQuery, params);
+
+            connection.commit();
+            connection.release();
+            
+            return productRows[0];
+        } catch (err) {
+            connection.rollback();
+            connection.release();
+            logger.error(`App - getProductInfo Transaction error\n: ${err.message}`);
+            return res.status(500).send(`Error: ${err.message}`);
+        }
     } catch (err) {
         logger.error(`App - getProductInfo DB Connection error\n: ${err.message}`);
         return res.status(500).send(`Error: ${err.message}`);

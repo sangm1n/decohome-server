@@ -5,7 +5,9 @@ async function getAllHouseIntro(page, size, condition, typeCond, pyungCond, styl
     try {
         const connection = await pool.getConnection(async (conn) => conn);
         const getAllHouseIntroQuery = `
-        select hi.houseIntroId, spaceImage, title, w.hashTagId, w.hashTagName
+        select hi.houseIntroId, spaceImage, title, w.hashTagId,  w.hashTagName,
+        concat('조회수 ', format(hi.viewCount, 0)) as countView,
+        concat('보관함 ', format(ifnull(x.countLocker, 0), 0)) as countLocker
         from HouseIntro hi
         join SpaceImage si on hi.houseIntroId = si.houseIntroId
         left join (select hi.houseIntroId, c.isDeleted, ifnull(count(commentId), 0) as countComment
@@ -15,10 +17,14 @@ async function getAllHouseIntro(page, size, condition, typeCond, pyungCond, styl
         group by c.houseIntroId) v on hi.houseIntroId = v.houseIntroId
         join (select houseIntroId,
         tagStatus,
-        group_concat(distinct hashTagId order by tagStatus separator '/')   as hashTagId,
+        group_concat(distinct hashTagId order by tagStatus separator '/')                as hashTagId,
         group_concat(distinct concat('#', hashTagName) order by tagStatus separator ' ') as hashTagName
         from HashTag ht
         group by houseIntroId) w on w.houseIntroId = hi.houseIntroId
+        left join (select hi.houseIntroId, count(userLockerId) as countLocker
+        from UserLocker ul
+        join HouseIntro hi on ul.houseIntroId = hi.houseIntroId
+        group by hi.houseIntroId) x on x.houseIntroId = hi.houseIntroId
         where si.isThumbnailed = 'Y'
         and hi.isDeleted = 'N'` + typeCond + pyungCond + styleCond + `
         and si.isDeleted = 'N'` + condition + ` limit ` + page + `, ` + size + `;
@@ -268,26 +274,54 @@ async function getIntroTag(houseIntroId) {
   }
 }
 
-async function getIntroPost(houseIntroId) {
+async function getIntroPost(userId, houseIntroId) {
   try {
-      const connection = await pool.getConnection(async (conn) => conn);
-      const getIntroPostQuery = `
-      select v.spaceId, v.spaceImage, w.content
-      from (select houseIntroId, spaceId, spaceImage, ROW_NUMBER() OVER (PARTITION BY houseIntroId) as imageRN
-      from SpaceImage) v
-      join (select houseIntroId, content, ROW_NUMBER() OVER (PARTITION BY houseIntroId) as textRN
-      from HouseIntroText) w on v.houseIntroId = w.houseIntroId
-      where v.houseIntroId = ` + houseIntroId + `
-      and v.imageRN = w.textRN;
-      `;
-      const getIntroPostParams = [houseIntroId];
-      const [introPostRows] = await connection.query(
-        getIntroPostQuery,
-        getIntroPostParams
-      );
-      connection.release();
-      
-      return introPostRows;
+    const connection = await pool.getConnection(async (conn) => conn);
+    try {
+        connection.beginTransaction();
+        const getIntroPostQuery = `
+        select v.spaceId, v.spaceImage, w.content
+        from (select houseIntroId, spaceId, spaceImage, ROW_NUMBER() OVER (PARTITION BY houseIntroId) as imageRN
+        from SpaceImage) v
+        join (select houseIntroId, content, ROW_NUMBER() OVER (PARTITION BY houseIntroId) as textRN
+        from HouseIntroText) w on v.houseIntroId = w.houseIntroId
+        where v.houseIntroId = ` + houseIntroId + `
+        and v.imageRN = w.textRN;
+        `;
+        const getIntroPostParams = [houseIntroId];
+        const [introPostRows] = await connection.query(
+          getIntroPostQuery,
+          getIntroPostParams
+        );
+        const existQuery = `select exists(select userId from RecentView where userId = ` + userId + ` and houseIntroId = ` + houseIntroId + ` and isDeleted = 'N') as exist;`;
+        const insertQuery = `insert into RecentView (userId, houseIntroId, productId)
+        values (` + userId + `, ` + houseIntroId + `, default);`;
+        const selectQuery = `select if((select houseIntroId from RecentView where isDeleted = 'N' userId = ` + userId + ` and houseIntroId = ` + houseIntroId + `) = -1, 0, 1) as exist;`;
+        const updateQuery = `update RecentView set updatedAt = default where houseIntroId = ` + houseIntroId + ` and userId = ` + userId + `;`;
+        const viewCountQuery = `update HouseIntro set viewCount = viewCount + 1 where houseIntroId = ` + houseIntroId + `;`
+        const params = [userId, houseIntroId];
+        const [existRows] = await connection.query(existQuery, params);
+        if (existRows[0].exist === 0) {
+            await connection.query(insertQuery, params);
+        } else {
+            const [selectRows] = await connection.query(selectQuery, params);
+            if (selectRows[0].exist === 1) {
+                await connection.query(updateQuery, params);
+            } else {
+                await connection.query(insertQuery, params);
+            }
+        }
+        await connection.query(viewCountQuery, params);
+        connection.commit();
+        connection.release();
+        
+        return introPostRows;
+    } catch (err) {
+        connection.rollback();
+        connection.release();
+        logger.error(`App - getIntroPost Transaction error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
   } catch (err) {
       logger.error(`App - getIntroPost DB Connection error\n: ${err.message}`);
       return res.status(500).send(`Error: ${err.message}`);
@@ -450,26 +484,36 @@ async function getTag(houseIntroId) {
 
 async function getSpaceInfo(spaceId) {
   try {
-      const connection = await pool.getConnection(async (conn) => conn);
-      const getSpaceInfoQuery = `
-      select spaceImage,
-      concat('조회수 ', format(viewCount, 0))       as viewCount,
-      concat('보관함 ', format(count(lockerId), 0)) as lockerCount
-      from SpaceImage si
-      left join UserLocker ul on si.spaceId = ul.spaceId
-      where si.spaceId = ?;
-      `;
-      const getSpaceInfoParams = [spaceId];
-      const [productRows] = await connection.query(
-        getSpaceInfoQuery,
-        getSpaceInfoParams
-      );
-      connection.release();
-
-      return productRows[0];
+    const connection = await pool.getConnection(async (conn) => conn);
+    try {
+        connection.beginTransaction();
+        const getSpaceInfoQuery = `
+        select spaceImage,
+        concat('조회수 ', format(viewCount, 0))       as viewCount,
+        concat('보관함 ', format(count(lockerId), 0)) as lockerCount
+        from SpaceImage si
+        left join UserLocker ul on si.spaceId = ul.spaceId
+        where si.spaceId = ?; 
+        `;
+        const viewCountQuery = `update SpaceImage set viewCount = viewCount + 1 where spaceId = ?; `
+        const getSpaceInfoParams = [spaceId, spaceId];
+        const productRows = await connection.query(
+          getSpaceInfoQuery + viewCountQuery,
+          getSpaceInfoParams
+        );
+        connection.commit();
+        connection.release();
+        
+        return productRows[0];
+    } catch (err) {
+        connection.rollback();
+        connection.release();
+        logger.error(`App - getSpaceInfo Transaction error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
   } catch (err) {
-      logger.error(`App - getSpaceInfo DB Connection error\n: ${err.message}`);
-      return res.status(500).send(`Error: ${err.message}`);
+    logger.error(`App - getSpaceInfo DB Connection error\n: ${err.message}`);
+    return res.status(500).send(`Error: ${err.message}`);
   }
 }
 
