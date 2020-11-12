@@ -237,7 +237,7 @@ async function getProductInfo(userId, productId) {
             const insertQuery = `insert into RecentView (userId, houseIntroId, productId)
             values (` + userId + `, default, ` + productId + `);`;
             const selectQuery = `select if((select productId from RecentView where isDeleted = 'N' and userId = ` + userId + ` and productId = ` + productId + `) = -1, 0, 1) as exist;`;
-            const updateQuery = `update RecentView set updatedAt = default where productId = ` + productId + ` and userId = ` + userId + `;`;
+            const updateQuery = `update RecentView set updatedAt = default where isDeleted = 'N' and productId = ` + productId + ` and userId = ` + userId + `;`;
             const viewCountQuery = `update Product set viewCount = viewCount + 1 where productId = ` + productId + `;`
             const params = [userId, productId];
             const [existRows] = await connection.query(existQuery, params);
@@ -577,7 +577,7 @@ async function getRecomPost(recommendId, page, size) {
         and p.isDeleted = 'N'
         and b.isDeleted = 'N'
         and recommendId = ?
-        group by p.productId
+        group by productName
         limit ` + page + `, ` + size + `;
         `;
         const getRecomPostParams = [recommendId, page, size];
@@ -634,6 +634,151 @@ async function checkRecommend(recommendId) {
     }
 }
 
+// 상품 후기
+async function getScores(productId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const reviewQuery = `
+        select convert(round(avg(score), 1), float) as averageScore,
+        cast(round(avg(score)) as unsigned) as countStar,
+        (select round(count(reviewId), 0) as countReview
+        from ProductReview
+        where productId = ?
+        and score = 1)    as onePoint,
+        (select round(count(reviewId), 0) as countReview
+        from ProductReview
+        where productId = ?
+        and score = 2)    as twoPoint,
+        (select round(count(reviewId), 0) as countReview
+        from ProductReview
+        where productId = ?
+        and score = 3)    as threePoint,
+        (select round(count(reviewId), 0) as countReview
+        from ProductReview
+        where productId = ?
+        and score = 4)    as fourPoint,
+        (select round(count(reviewId), 0) as countReview
+        from ProductReview
+        where productId = ?
+        and score = 5)    as fivePoint
+        from ProductReview
+        where productId = ?;
+        `;
+        const reviewParams = [productId, productId, productId, productId, productId, productId];
+        const [reviewRows] = await connection.query(
+            reviewQuery,
+            reviewParams
+        );
+        connection.release();
+        
+        return reviewRows[0];
+    } catch (err) {
+        logger.error(`App - getScores DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function getPhotoCount(productId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const reviewQuery = `
+        select ifnull(count(ri.reviewId), 0) as countPhotoReview
+        from ReviewImage ri
+        join ProductReview pr on ri.reviewId = pr.reviewId
+        where pr.productId = ?
+        and isThumbnailed = 'Y';
+        `;
+        const reviewParams = [productId];
+        const [reviewRows] = await connection.query(
+            reviewQuery,
+            reviewParams
+        );
+        connection.release();
+        
+        return reviewRows[0];
+    } catch (err) {
+        logger.error(`App - getPhotoCount DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function getPhotos(productId, page, size) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const reviewQuery = `
+        select reviewImageId, reviewImage
+        from ReviewImage ri
+        join ProductReview pr on ri.reviewId = pr.reviewId
+        where pr.productId = ` + productId + ` and ri.isThumbnailed = 'Y' 
+        order by pr.createdAt desc
+        limit ` + page + `, ` + size + `;
+        `;
+        const reviewParams = [productId, page, size];
+        const [reviewRows] = await connection.query(
+            reviewQuery,
+            reviewParams
+        );
+        connection.release();
+        
+        return reviewRows;
+    } catch (err) {
+        logger.error(`App - getPhotos DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function getReviewCount(productId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const reviewQuery = `
+        select ifnull(count(reviewId), 0) as countReview
+        from ProductReview where productId = ?;
+        `;
+        const reviewParams = [productId];
+        const [reviewRows] = await connection.query(
+            reviewQuery,
+            reviewParams
+        );
+        connection.release();
+        
+        return reviewRows[0];
+    } catch (err) {
+        logger.error(`App - getReviewCount DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function getReviews(productId, page, size) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const reviewQuery = `
+        select score,
+        content,
+        ifnull(ri.reviewId, -1)               as reviewId,
+        ifnull(reviewImage, -1)               as reviewImage,
+        nickname,
+        date_format(pr.createdAt, '%Y-%m-%d') as createdAt
+        from ProductReview pr
+        left join ReviewImage ri on pr.reviewId = ri.reviewId
+        join User u on u.userId = pr.userId
+        where pr.productId = ? group by nickname order by pr.createdAt
+        limit ?, ?;
+        `;
+        const reviewParams = [productId, Number(page), Number(size)];
+        const [reviewRows] = await connection.query(
+            reviewQuery,
+            reviewParams
+        );
+        connection.release();
+        
+        return reviewRows;
+    } catch (err) {
+        logger.error(`App - getReviews DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+
 module.exports = {
     getAllProducts,
     getCategoryId,
@@ -656,4 +801,9 @@ module.exports = {
     getRecomPost,
     checkRecommend,
     getRecomImage,
+    getScores,
+    getPhotoCount,
+    getPhotos,
+    getReviewCount,
+    getReviews,
 };

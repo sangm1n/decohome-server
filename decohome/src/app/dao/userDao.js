@@ -60,15 +60,24 @@ async function insertUserInfo(email, hashedPassword, nickname, phone) {
             const [getUserInfoRow] = await connection.query(
                 getUserIdQuery, email
             );
-            const insertUserLockerQuery = `
+            const insertLockerQuery = `
             insert into Locker (userId, lockerName, isPrivated)
             values (?, '매거진', default ), (?, '가구 & 소품', default);
             `
-            const insertUserLockerParams = [getUserInfoRow[0].userId, getUserInfoRow[0].userId];
+            const selectLockerQuery = `
+            select lockerId from Locker where userId = ? and isDeleted = 'N';
+            `
+            const insertLockerParmas = [getUserInfoRow[0].userId, getUserInfoRow[0].userId, getUserInfoRow[0].userId];
+            const [result] = await connection.query(
+                insertLockerQuery + selectLockerQuery, 
+                insertLockerParmas
+            );
+            const insertUserLockerQuery = `
+            insert into UserLocker (lockerId) values (?), (?);
+            `
             await connection.query(
-                insertUserLockerQuery, 
-                insertUserLockerParams
-            )
+                insertUserLockerQuery, [result[1][0].lockerId, result[1][1].lockerId]
+            );
             await connection.commit();
             connection.release();
             
@@ -198,6 +207,102 @@ async function updateProfileImage(profileImage, userId, idx) {
     }
 }
 
+// 최근 본 상품/컨텐츠
+async function getRecentProduct(userId, page, size) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        try {
+        connection.beginTransaction();
+        const updateQuery = `
+        update RecentView
+        set isDeleted = case
+        when timestampdiff(hour, updatedAt, now()) > 6
+        then 'Y' else 'N' end where userId = ?;
+        `
+        const recentQuery = `
+        select p.productId,
+        productImage,
+        brandName,
+        productName,
+        concat(format(salePrice, 0), '원') as salePrice,
+        if(isSoldedOut = 'Y', '품절',
+        if(salePrice = -1, null, concat(round((1 - salePrice / originalPrice) * 100), '%'))) as saleRatio
+        from Product p
+        join Brand b on p.brandId = b.brandId
+        join ProductImage pi on p.productId = pi.productId
+        join RecentView rv on p.productId = rv.productId
+        where pi.isThumbnailed = 'Y'
+        and rv.isDeleted = 'N'
+        and rv.productId != -1
+        and rv.userId = ?
+        order by rv.updatedAt desc
+        limit ?, ?;
+        `;
+        const recentParams = [userId, userId, Number(page), Number(size)];
+        const [recentRows] = await connection.query(
+            updateQuery + recentQuery,
+            recentParams
+        );
+        connection.release();
+        
+        return recentRows[1];
+        } catch (err) {
+            logger.error(`App - getRecentProduct Transaction error\n: ${err.message}`);
+            return res.status(500).send(`Error: ${err.message}`);
+        }
+    } catch (err) {
+        logger.error(`App - getRecentProduct DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function getRecentHouse(userId, page, size) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        try {
+        connection.beginTransaction();
+        const updateQuery = `
+        update RecentView
+        set isDeleted = case
+        when timestampdiff(hour, updatedAt, now()) > 6
+        then 'Y' else 'N' end where userId = ?;
+        `
+        const recentQuery = `
+        select hi.houseIntroId, spaceImage, title, v.hashTagName
+        from HouseIntro hi
+        join SpaceImage si on hi.houseIntroId = si.houseIntroId
+        join RecentView rv on hi.houseIntroId = rv.houseIntroId
+        join (select houseIntroId,
+        tagStatus,
+        group_concat(distinct '#', hashTagName order by tagStatus separator ' ') as hashTagName
+        from HashTag ht
+        group by houseIntroId) v on v.houseIntroId = hi.houseIntroId
+        where si.isDeleted = 'N'
+        and si.isThumbnailed = 'Y'
+        and rv.houseIntroId != -1
+        and rv.userId = ?
+        order by rv.updatedAt desc
+        limit ?, ?;
+        `;
+        const recentParams = [userId, userId, Number(page), Number(size)];
+        const [recentRows] = await connection.query(
+            updateQuery + recentQuery,
+            recentParams
+        );
+        connection.release();
+        
+        return recentRows[1];
+        } catch (err) {
+            logger.error(`App - getRecentHouse Transaction error\n: ${err.message}`);
+            return res.status(500).send(`Error: ${err.message}`);
+        }
+    } catch (err) {
+        logger.error(`App - getRecentHouse DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+
 module.exports = {
     userEmailCheck,
     userNicknameCheck,
@@ -207,4 +312,6 @@ module.exports = {
     updateUserProfile,
     deleteUserProfile,
     updateProfileImage,
+    getRecentProduct,
+    getRecentHouse,
 };

@@ -296,8 +296,8 @@ async function getIntroPost(userId, houseIntroId) {
         const existQuery = `select exists(select userId from RecentView where userId = ` + userId + ` and houseIntroId = ` + houseIntroId + ` and isDeleted = 'N') as exist;`;
         const insertQuery = `insert into RecentView (userId, houseIntroId, productId)
         values (` + userId + `, ` + houseIntroId + `, default);`;
-        const selectQuery = `select if((select houseIntroId from RecentView where isDeleted = 'N' userId = ` + userId + ` and houseIntroId = ` + houseIntroId + `) = -1, 0, 1) as exist;`;
-        const updateQuery = `update RecentView set updatedAt = default where houseIntroId = ` + houseIntroId + ` and userId = ` + userId + `;`;
+        const selectQuery = `select if((select houseIntroId from RecentView where isDeleted = 'N' and userId = ` + userId + ` and houseIntroId = ` + houseIntroId + `) = -1, 0, 1) as exist;`;
+        const updateQuery = `update RecentView set updatedAt = default where isDeleted = 'N' and houseIntroId = ` + houseIntroId + ` and userId = ` + userId + `;`;
         const viewCountQuery = `update HouseIntro set viewCount = viewCount + 1 where houseIntroId = ` + houseIntroId + `;`
         const params = [userId, houseIntroId];
         const [existRows] = await connection.query(existQuery, params);

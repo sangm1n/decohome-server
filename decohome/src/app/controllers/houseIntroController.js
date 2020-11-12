@@ -29,7 +29,7 @@ exports.getHouseIntro = async function (req, res) {
     switch (filter) {
         case '1': condition += 'hi.createdAt desc'; break;
         case '2': condition += 'countComment desc'; break;
-        case '3': condition += 'rand(100)'; break;
+        case '3': condition += 'countLocker desc'; break;
         case '4': condition += 'hi.viewCount desc'; break;
         default: return res.json({ isSuccess: false, code: 303, message: "존재하지 않는 필터링" });
     }

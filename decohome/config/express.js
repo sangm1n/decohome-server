@@ -23,6 +23,7 @@ module.exports = function () {
     require('../src/app/routes/productRoute')(app);
     require('../src/app/routes/houseIntroRoute')(app);
     require('../src/app/routes/lockerRoute')(app);
+    require('../src/app/routes/searchRoute')(app);
 
     /* Web */
     // require('../src/web/routes/indexRoute')(app);

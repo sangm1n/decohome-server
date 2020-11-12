@@ -59,7 +59,7 @@ async function getRecent(userId) {
         from Search
         where userId = ?
         and isDeleted = 'N'
-        and timestampdiff(hour, createdAt, now()) < 6
+        and timestampdiff(hour, createdAt, now()) < 12
         order by createdAt desc;
         `;
         const searchParams = [userId];

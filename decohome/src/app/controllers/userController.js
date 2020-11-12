@@ -278,3 +278,38 @@ exports.updateProfileImage = async function (req, res) {
         return res.status(500).send(`Error: ${err.message}`);
     }
 }
+
+/**
+ * update - 2020.11.11
+ * 38. 최근 본 상품/컨텐츠 조회 API
+ */
+exports.getRecentView = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    let {
+        filter, page, size
+    } = req.query;
+    
+    if (filter != 1 & filter != 2) return res.json({ isSuccess: false, code: 300, message: "존재하지 않는 필터링" });
+    if (!page) return res.json({ isSuccess: false, code: 301, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 302, message: "사이즈 입력 필요" });
+
+    page = size * (page-1);
+
+    try {
+        let recentRows;
+
+        switch (filter) {
+            case '1':
+                recentRows = await userDao.getRecentProduct(userId, page, size);
+                return res.json({ result: recentRows, isSuccess: true, code: 200, message: "최근 본 상품 조회 성공" });
+            case '2':
+                recentRows = await userDao.getRecentHouse(userId, page, size);
+                return res.json({ result: recentRows, isSuccess: true, code: 201, message: "최근 본 컨텐츠 조회 성공" });
+            default:
+                return res.json({ isSuccess: false, code: 303, message: "최근 본 상품/컨텐츠 조회 실패" });
+        }
+    } catch (err) {
+        logger.error(`App - UpdateProfileImage Query error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}

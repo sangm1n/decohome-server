@@ -9,4 +9,5 @@ module.exports = function(app){
     app.route('/user/profile').delete(jwtMiddleware, user.deleteProfile);
     app.route('/user/nickname').get(jwtMiddleware, user.checkNickname);
     app.route('/user/profile-image').put(jwtMiddleware, user.updateProfileImage);
+    app.route('/user/recent-view').get(jwtMiddleware, user.getRecentView);
 };

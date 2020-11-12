@@ -32,7 +32,7 @@ exports.getProducts = async function (req, res) {
 
     switch (filter) {
         case '1':
-            condition = 'rand(100)';
+            condition = 'viewCount desc';
             break;
         case '2':
             condition = 'p.createdAt desc, productId desc';
@@ -193,13 +193,14 @@ exports.getProduct = async function (req, res) {
         const category = await productDao.getCategoryName(condition, 4);
         const imageRows = await productDao.getProductImage(productId);
         const productRows = await productDao.getProductInfo(userId, productId);   
-        
+        const productDetailRows = await productDao.getProductDetail(productId);
         if (!category) return res.json({ isSuccess: false, code: 301, message: "카테고리 조회 실패" });
         if (!imageRows) return res.json({ isSuccess: false, code: 302, message: "상품 이미지 조회 실패" });
         if (!productRows) return res.json({ isSuccess: false, code: 303, message: "상품 조회 실패" });
+        if (!productDetailRows) return res.json({ isSuccess: false, code: 304, message: "상품 정보 조회 실패" });
 
         res.json({
-            result: {category, images: imageRows, product: productRows},
+            result: {category, images: imageRows, product: productRows, detail: productDetailRows},
             isSuccess: true,
             code: 200,
             message: "상품 조회 성공"
@@ -436,7 +437,7 @@ exports.getBrands = async function (req, res) {
 
     switch (filter) {
         case '1':
-            condition = 'rand(100)';
+            condition = 'brandId';
             break;
         case '2':
             condition = 'countProduct desc';
@@ -502,7 +503,7 @@ exports.getBrandProduct = async function (req, res) {
 
     switch (filter) {
         case '1':
-            condition = 'rand(100)';
+            condition = 'viewCount desc';
             break;
         case '2':
             condition = 'p.createdAt desc';
@@ -619,6 +620,127 @@ exports.getRecommendPost = async function (req, res) {
         }); 
     } catch (err) {
         logger.error(`App - RecommendPost Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.11
+ * 34. 상품 평점 조회 API
+ */
+exports.getProductScore = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        productId
+    } = req.params;
+
+    if (await productDao.checkProduct(productId) === 0) return res.json({ isSuccess: false, code: 300, message: "존재하지 않는 상품" });    
+
+    try {
+        const scoreRows = await productDao.getScores(productId);
+
+        if (!scoreRows) {
+            return res.json({
+            isSuccess: false,
+            code: 301,
+            message: "상품 평점 조회 실패"
+            });
+        };
+
+        res.json({
+            result: scoreRows,
+            isSuccess: true,
+            code: 200,
+            message: "상품 평점 조회 성공"
+        }); 
+    } catch (err) {
+        logger.error(`App - ProductScore Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.11
+ * 35. 상품 사진 후기 조회 API
+ */
+exports.getPhotoReview = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        productId
+    } = req.params;
+    let {
+        page, size
+    } = req.query;
+
+    if (await productDao.checkProduct(productId) === 0) return res.json({ isSuccess: false, code: 300, message: "존재하지 않는 상품" });    
+    if (!page) return res.json({ isSuccess: false, code: 301, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 302, message: "사이즈 입력 필요" });
+    
+    page = size * (page-1);
+
+    try {
+        const reviewRows = await productDao.getPhotoCount(productId);
+        const photoRows = await productDao.getPhotos(productId, page, size);
+
+        if (!reviewRows) {
+            return res.json({
+            isSuccess: false,
+            code: 303,
+            message: "상품 사진 후기 조회 실패"
+            });
+        };
+
+        res.json({
+            result: {photoCount: reviewRows, photoList: photoRows},
+            isSuccess: true,
+            code: 200,
+            message: "상품 사진 후기 조회 성공"
+        }); 
+    } catch (err) {
+        logger.error(`App - PhotoReview Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.12
+ * 36. 상품 전체 후기 조회 API
+ */
+exports.getReview = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        productId
+    } = req.params;
+    let {
+        page, size
+    } = req.query;
+
+    if (await productDao.checkProduct(productId) === 0) return res.json({ isSuccess: false, code: 300, message: "존재하지 않는 상품" });    
+    if (!page) return res.json({ isSuccess: false, code: 301, message: "페이지 입력 필요" });
+    if (!size) return res.json({ isSuccess: false, code: 302, message: "사이즈 입력 필요" });
+    
+    page = size * (page-1);
+
+    try {
+        const reviewRows = await productDao.getReviewCount(productId);
+        const photoRows = await productDao.getReviews(productId, page, size);
+
+        if (!reviewRows) {
+            return res.json({
+            isSuccess: false,
+            code: 303,
+            message: "상품 전체 후기 조회 실패"
+            });
+        };
+
+        res.json({
+            result: {reviewCount: reviewRows, reviewList: photoRows},
+            isSuccess: true,
+            code: 200,
+            message: "상품 전체 후기 조회 성공"
+        }); 
+    } catch (err) {
+        logger.error(`App - Review Query error\n: ${JSON.stringify(err)}`);
         return false;
     }
 }

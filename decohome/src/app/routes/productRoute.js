@@ -14,4 +14,7 @@ module.exports = function(app){
     app.route('/products/sale').get(jwtMiddleware, product.getOnlySale);
     app.route('/products/:productId').get(jwtMiddleware, product.getProduct);
     app.route('/products/:productId/info').get(jwtMiddleware, product.getProductDetail);
+    app.route('/products/:productId/score').get(jwtMiddleware, product.getProductScore);
+    app.route('/products/:productId/image-review').get(jwtMiddleware, product.getPhotoReview);
+    app.route('/products/:productId/review').get(jwtMiddleware, product.getReview);
 };
