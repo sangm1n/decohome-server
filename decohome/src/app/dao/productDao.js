@@ -634,6 +634,26 @@ async function checkRecommend(recommendId) {
     }
 }
 
+async function checkOption(optionId, productId) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const checkQuery = `
+        select exists (select optionId from ProductOption where optionId = ? and productId = ?) as exist;
+        `;
+        const checkParams = [optionId, productId];
+        const [checkRows] = await connection.query(
+            checkQuery,
+            checkParams
+        );
+        connection.release();
+        
+        return checkRows[0].exist;
+    } catch (err) {
+        logger.error(`App - checkOption DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
 // 상품 후기
 async function getScores(productId) {
     try {
@@ -778,6 +798,61 @@ async function getReviews(productId, page, size) {
     }
 }
 
+// 상품 옵션
+async function getOptionRef(productId, ref) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const optionQuery = `
+        select optionId, optionName, concat(format(optionPrice, 0), '원~') as optionPrice
+        from ProductOption
+        where productId = ?
+        and optionRef = ?
+        and optionStatus = 'R';
+        `;
+        const optionParams = [productId, ref];
+        const [optionRows] = await connection.query(
+            optionQuery,
+            optionParams
+        );
+        connection.release();
+        
+        return optionRows;
+    } catch (err) {
+        logger.error(`App - getOptionRef DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
+async function getAddOption(productId, optionId, ref) {
+    try {
+        const connection = await pool.getConnection(async (conn) => conn);
+        const optionQuery = `
+        select optionId,
+        optionName,
+        case
+        when optionPrice = -1
+        then
+        concat(format((select optionPrice from ProductOption where productId = ? and optionId = ? and optionStatus = 'R'), 0), '원~')
+        else concat(format(optionPrice, 0), '원~') end as optionPrice
+        from ProductOption
+        where productId = ?
+        and optionRef = ?
+        and optionStatus = 'A';
+        `;
+        const optionParams = [productId, optionId, productId, ref];
+        const [optionRows] = await connection.query(
+            optionQuery,
+            optionParams
+        );
+        connection.release();
+        
+        return optionRows;
+    } catch (err) {
+        logger.error(`App - getAddOption DB Connection error\n: ${err.message}`);
+        return res.status(500).send(`Error: ${err.message}`);
+    }
+}
+
 
 module.exports = {
     getAllProducts,
@@ -806,4 +881,7 @@ module.exports = {
     getPhotos,
     getReviewCount,
     getReviews,
+    getOptionRef,
+    getAddOption,
+    checkOption,
 };

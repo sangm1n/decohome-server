@@ -149,7 +149,7 @@ exports.getLocker = async function (req, res) {
 
 /**
  * update - 2020.11.12
- * 32. 보관함에 상품 저장 API
+ * 32. 보관함에 저장 API
  */
 exports.setLocker = async function (req, res) {
     const userId = req.verifiedToken.userId;    

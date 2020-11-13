@@ -208,10 +208,11 @@ exports.deleteRecentSearch = async function (req, res) {
         word
     } = req.query;
 
-    if (!word) return res.json({ isSuccess: false, code: 300, message: "검색어 입력 필요" });
-    if (await searchDao.checkWord(word, userId) === 0) return res.json({ isSuccess: false, code: 301, message: "존재하지 않는 검색어" });
-    if (word === '전체') status = 0 
+    if (word == '전체') status = 0 
     else status = 1;
+    if (!word) return res.json({ isSuccess: false, code: 300, message: "검색어 입력 필요" });
+    // if (await searchDao.checkWord(word, userId) === 0) return res.json({ isSuccess: false, code: 301, message: "존재하지 않는 검색어" });
+    
 
     try {     
         const searchRows = await searchDao.deleteRecent(userId, status, word);

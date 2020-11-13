@@ -298,7 +298,7 @@ exports.getSpacePost = async function (req, res) {
         if (!spaceRows) return res.json({ isSuccess: false, code: 303, message: "공간 게시글 조회 실패" });
 
         res.json({
-            result: {houseInfo: houseInfoRows, tagList: tagRows, spaceInfo: spaceRows},
+            result: {houseInfo: houseInfoRows, tagList: tagRows, spaceInfo: spaceRows[0]},
             isSuccess: true,
             code: 200,
             message: "공간 게시글 조회 성공"

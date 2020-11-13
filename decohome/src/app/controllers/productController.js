@@ -744,3 +744,82 @@ exports.getReview = async function (req, res) {
         return false;
     }
 }
+
+/**
+ * update - 2020.11.13
+ * 36. 상품 필수 옵션 조회 API
+ */
+exports.getProductOption = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        productId
+    } = req.params;
+    const {
+        ref
+    } = req.query;
+
+    if (!ref) return res.json({ isSuccess: false, code: 300, message: "참조값 입력 필수" }); 
+    if (await productDao.checkProduct(productId) === 0) return res.json({ isSuccess: false, code: 301, message: "존재하지 않는 상품" });       
+
+    try {
+        const optionRows = await productDao.getOptionRef(productId, ref);
+
+        if (!optionRows) {
+            return res.json({
+            isSuccess: false,
+            code: 302,
+            message: "상품 필수 옵션 조회 실패"
+            });
+        };
+
+        res.json({
+            result: optionRows,
+            isSuccess: true,
+            code: 200,
+            message: "상품 필수 옵션 조회 성공"
+        }); 
+    } catch (err) {
+        logger.error(`App - ProductOption Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
+
+/**
+ * update - 2020.11.13
+ * 37. 상품 추가 옵션 조회 API
+ */
+exports.getAdditionalOption = async function (req, res) {
+    const userId = req.verifiedToken.userId;
+    const {
+        productId, optionId
+    } = req.params;
+    const {
+        ref
+    } = req.query;
+
+    if (!ref) return res.json({ isSuccess: false, code: 300, message: "참조값 입력 필수" }); 
+    if (await productDao.checkProduct(productId) === 0) return res.json({ isSuccess: false, code: 301, message: "존재하지 않는 상품" });  
+    if (await productDao.checkOption(optionId, productId) === 0) return res.json({ isSuccess: false, code: 302, message: "존재하지 않는 옵션" });            
+
+    try {
+        const optionRows = await productDao.getAddOption(productId, optionId, ref);
+
+        if (!optionRows) {
+            return res.json({
+            isSuccess: false,
+            code: 303,
+            message: "상품 추가 옵션 조회 실패"
+            });
+        };
+
+        res.json({
+            result: optionRows,
+            isSuccess: true,
+            code: 200,
+            message: "상품 추가 옵션 조회 성공"
+        }); 
+    } catch (err) {
+        logger.error(`App - AdditionalOption Query error\n: ${JSON.stringify(err)}`);
+        return false;
+    }
+}
