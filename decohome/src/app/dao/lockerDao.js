@@ -233,6 +233,7 @@ async function getLockerList(userId, page, size) {
         then concat(timestampdiff(week, ul.updatedAt, now()), '주 전')
         when timestampdiff(month, ul.updatedAt, now()) < 12
         then concat(timestampdiff(month, ul.updatedAt, now()), '달 전')
+        else date_format(hi.createdAt, '%Y-%m-%d')
         end as updateTime
         from UserLocker ul
         join Locker l on ul.lockerId = l.lockerId
@@ -311,6 +312,7 @@ async function getLockerDetail(lockerId, page, size) {
         then concat(timestampdiff(week, ul.updatedAt, now()), '주 전')
         when timestampdiff(month, ul.updatedAt, now()) < 12
         then concat(timestampdiff(month, ul.updatedAt, now()), '달 전')
+        else date_format(hi.createdAt, '%Y-%m-%d')
         end as updateTime
         from UserLocker ul
         join Locker l on ul.lockerId = l.lockerId
