@@ -8,3 +8,6 @@ config/database.js
 config/secret.js
 src/web
 src/webAdmin
+src/app/controllers/indexController.js
+src/app/dao/indexDao.js
+src/app/routes/indexRoute.js
