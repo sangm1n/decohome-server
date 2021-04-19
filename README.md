@@ -10,7 +10,7 @@
  └── 📄 winston.js
 📂 progress
  └── 📄 DATE.md
-📂 middlewares
+📂 src
  └── 📂 app
       ├── 📂 controller
       |    ├── 📄 houseIntroController.js
@@ -23,10 +23,10 @@
       |    ├── 📄 productDao.js
       |    └── 📄 searchDao.js
       └── 📂 routes
-      |    ├── 📄 houseIntroRoute.js
-      |    ├── 📄 lockerRoute.js
-      |    ├── 📄 productRoute.js
-      |    └── 📄 searchRoute.js
+           ├── 📄 houseIntroRoute.js
+           ├── 📄 lockerRoute.js
+           ├── 📄 productRoute.js
+           └── 📄 searchRoute.js
 📄 .gitignore
 📄 index.js
 📄 package.json
